@@ -1,0 +1,80 @@
+## infra/prometheus/helm-values.yaml
+##
+## Helm values overrides for prometheus-community/prometheus (umbrella chart).
+## Consumed by:
+##   helm install prometheus prometheus-community/prometheus -n observability \
+##     -f infra/prometheus/helm-values.yaml --create-namespace
+##
+## Design notes:
+## - Retention 15d is longer than Tempo/Loki (7d) because Prometheus metrics are
+##   cheap and the SLO multi-window burn-rate math (Task 15/16) benefits from a
+##   15d window (slow-burn rules need at least 1h × 30d = 30d, but for the demo
+##   15d is sufficient).
+## - `server.configMapOverrideName` defers the full Prometheus config to
+##   `infra/prometheus/configmap.yaml`, which is applied independently.
+## - Alertmanager config is inlined under `alertmanager.config`; the equivalent
+##   standalone file lives at `infra/prometheus/alertmanager-config.yaml`.
+## - Pushgateway is disabled per design (pull-model only, see plan guardrail).
+## - kube-state-metrics is enabled for pod-level metrics required by SLO/alert
+##   rules (Task 15/16).
+
+server:
+  retention: "15d"
+  persistentVolume:
+    size: 10Gi
+
+  global:
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    evaluation_interval: 15s
+
+  ## Mount our own prometheus.yml ConfigMap instead of letting the chart render
+  ## the default scrape configs. The ConfigMap must contain a `prometheus.yml`
+  ## key (matching server.configPath = /etc/config/prometheus.yml).
+  configMapOverrideName: prometheus-config
+
+  ## Explicitly disable anything that could forward to a remote system.
+  remoteWrite: []
+  remoteRead: []
+
+## Alertmanager subchart configuration. Mirrors infra/prometheus/alertmanager-config.yaml.
+alertmanager:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 2Gi
+  config:
+    route:
+      receiver: incident-engine
+      group_by: [alertname, service]
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 4h
+      routes:
+        - match_re:
+            severity: dropped-test
+          receiver: "null"
+    receivers:
+      - name: incident-engine
+        webhook_configs:
+          - url: http://incident-engine.incident.svc.cluster.local:8088/webhook
+            send_resolved: true
+      - name: "null"
+
+## kube-state-metrics subchart — provides pod/deployment/statefulset metrics
+## referenced by Task 15 SLO recoding rules and Task 16 alert rules.
+kube-state-metrics:
+  enabled: true
+
+## node-exporter: keep enabled (default). Captures node-level CPU/memory/disk
+## metrics used by infra dashboards.
+prometheus-node-exporter:
+  enabled: true
+
+## Pushgateway: DISABLED per plan guardrail ("No Prometheus pushgateway").
+prometheus-pushgateway:
+  enabled: false
+
+## NetworkPolicy off — cluster is local k3d, port-forward only.
+networkPolicy:
+  enabled: false

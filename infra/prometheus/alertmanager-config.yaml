@@ -1,0 +1,60 @@
+## infra/prometheus/alertmanager-config.yaml
+##
+## Alertmanager routing config — source of truth for the route/receivers tree.
+## Mirrored verbatim under `alertmanager.config` in infra/prometheus/helm-values.yaml
+## because the prometheus-community/alertmanager subchart consumes the config as
+## an inline Helm value (no separate configmap key is mounted by default in the
+## current chart version).
+##
+## Verification (against running AM):
+##   curl http://alertmanager.observability:9093/api/v1/receivers | jq '.[].name'
+##     -> ["incident-engine","null"]
+##   curl http://alertmanager.observability:9093/api/v1/routes   | jq '.[].receiver'
+##     -> "incident-engine"
+##
+## Defaults:
+##   - group_by:  [alertname, service]
+##   - group_wait: 10s
+##   - group_interval: 30s
+##   - repeat_interval: 4h
+##
+## Receivers:
+##   - incident-engine: webhook -> http://incident-engine.incident.svc:8088/webhook
+##   - "null": explicit drop receiver; tests + burned/inhibited alerts can be
+##            routed here to mute them without losing the alert record.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: incident-engine
+  group_by: [alertname, service]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 4h
+  routes:
+    # Opt-in drop route used to silence alert spam during dry runs / fires
+    # originating from synthetic injector. The matcher expects a label
+    # `severity=dropped-test` (set on incoming alerts via Prom recording rules
+    # or alert generators in Task 16/24).
+    - match_re:
+        severity: "dropped-test"
+      receiver: "null"
+
+receivers:
+  - name: incident-engine
+    webhook_configs:
+      - url: http://incident-engine.incident.svc.cluster.local:8088/webhook
+        send_resolved: true
+        # max_alerts: 0 (default = unbounded) — keep all grouped alerts in one
+        # webhook payload so incident-engine can render the full timeline.
+
+  - name: "null"
+
+# inhibit_rules intentionally empty here; Task 18 will add them when SLO alert
+# rules are finalised. Keeping the section absent avoids forcing every alert
+# into a single-name namespace.
+inhibit_rules: []
+
+templates:
+  - /etc/alertmanager/*.tmpl
