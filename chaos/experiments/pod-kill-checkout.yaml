@@ -1,0 +1,16 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-checkout
+  namespace: chaos-testing
+spec:
+  action: container-kill
+  mode: one
+  duration: 5m
+  containerNames:
+    - checkout-service
+  selector:
+    namespaces:
+      - ecom
+    labelSelectors:
+      app.kubernetes.io/name: checkout-service
