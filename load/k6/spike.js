@@ -1,0 +1,45 @@
+/**
+ * k6 spike test: sudden burst from low baseline to very high VUs.
+ *
+ * Profile: 10 VUs baseline, instant spike to 500 VUs for 30s, then back to baseline.
+ * Flow: lightweight health checks to survive the burst without saturating pods.
+ * Success criteria: HTTP error rate < 10% during the spike.
+ */
+
+const http = require("k6/http");
+const { check, sleep } = require("k6");
+
+const NS = __ENV.SERVICE_NAMESPACE || "ecom";
+
+exports.options = {
+  stages: [
+    { duration: "10s", target: 10 },
+    { duration: "10s", target: 500 },
+    { duration: "30s", target: 500 },
+    { duration: "10s", target: 10 },
+  ],
+  thresholds: {
+    http_req_failed: ["rate<0.10"],
+  },
+};
+
+const HEALTH_ENDPOINTS = [
+  `http://catalog-service.${NS}:8000/healthz`,
+  `http://inventory-service.${NS}:8001/healthz`,
+  `http://cart-service.${NS}:8002/healthz`,
+  `http://checkout-service-checkout-service.${NS}:8003/healthz`,
+  `http://order-service.${NS}:8004/healthz`,
+  `http://payment-gateway.${NS}:8005/healthz`,
+];
+
+exports.default = function () {
+  const healthUrl =
+    HEALTH_ENDPOINTS[Math.floor(Math.random() * HEALTH_ENDPOINTS.length)];
+  const res = http.get(healthUrl, { tags: { step: "health" } });
+
+  check(res, {
+    "health status is 200": (r) => r.status === 200,
+  });
+
+  sleep(0.1);
+};
