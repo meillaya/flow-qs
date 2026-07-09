@@ -1,0 +1,115 @@
+// Package payment holds the core charge logic and in-memory state.
+package payment
+
+import (
+	"crypto/rand"
+	"fmt"
+	"math/big"
+	"os"
+	"strconv"
+	"sync"
+
+	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
+)
+
+// ThresholdAmountCents is the maximum amount that is auto-approved.
+const ThresholdAmountCents int64 = 100000
+
+// Charge represents a persisted charge record.
+type Charge struct {
+	ChargeID    string
+	OrderID     string
+	AmountCents int64
+	CardToken   string
+	Status      paymentv1.Status
+}
+
+// Store holds charges in memory.
+type Store struct {
+	mu      sync.RWMutex
+	charges map[string]*Charge
+}
+
+// NewStore creates an empty Store.
+func NewStore() *Store {
+	return &Store{charges: make(map[string]*Charge)}
+}
+
+// failureRate returns the configured random failure probability.
+func failureRate() float64 {
+	raw := os.Getenv("FAILURE_RATE")
+	if raw == "" {
+		return 0.0
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v < 0 || v > 1 {
+		return 0.0
+	}
+	return v
+}
+
+// randomDecline returns true with probability rate.
+func randomDecline(rate float64) bool {
+	if rate <= 0 {
+		return false
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(1000))
+	if err != nil {
+		return false
+	}
+	return float64(n.Int64())/1000.0 < rate
+}
+
+// DecideStatus returns APPROVED or DECLINED based on amount and FAILURE_RATE.
+func DecideStatus(amountCents int64) paymentv1.Status {
+	if amountCents >= ThresholdAmountCents {
+		return paymentv1.Status_DECLINED
+	}
+	if randomDecline(failureRate()) {
+		return paymentv1.Status_DECLINED
+	}
+	return paymentv1.Status_APPROVED
+}
+
+// Charge creates a new charge and stores it.
+func (s *Store) Charge(orderID string, amountCents int64, cardToken string) *Charge {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	chargeID := fmt.Sprintf("ch_%s_%d", orderID, len(s.charges)+1)
+	c := &Charge{
+		ChargeID:    chargeID,
+		OrderID:     orderID,
+		AmountCents: amountCents,
+		CardToken:   cardToken,
+		Status:      DecideStatus(amountCents),
+	}
+	s.charges[chargeID] = c
+	return c
+}
+
+// Get returns a charge by ID or nil if missing.
+func (s *Store) Get(chargeID string) *Charge {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.charges[chargeID]
+}
+
+// Refund marks a charge as refunded and returns the updated charge.
+func (s *Store) Refund(chargeID string) *Charge {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.charges[chargeID]
+	if c == nil {
+		return nil
+	}
+	c.Status = paymentv1.Status_REFUNDED
+	return c
+}
+
+// Len returns the number of stored charges.
+func (s *Store) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.charges)
+}

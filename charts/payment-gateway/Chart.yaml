@@ -1,0 +1,6 @@
+apiVersion: v2
+name: payment-gateway
+description: Payment gateway service with Chi HTTP, gRPC, and OTel Go SDK
+version: 0.1.0
+appVersion: "0.1.0"
+type: application
