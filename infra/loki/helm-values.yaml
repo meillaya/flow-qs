@@ -1,0 +1,127 @@
+# Loki single-binary deployment with local filesystem storage.
+# Chart: grafana/loki
+# Deployment mode: SingleBinary (not microservices or simple-scalable).
+# Storage: filesystem on a 10Gi PVC mounted at /loki.
+# Schema: v13 with boltdb-shipper index store.
+# Retention: 7 days (168h).
+# Auth: disabled (cluster-internal use only).
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+
+  server:
+    http_listen_port: 3100
+    grpc_listen_port: 9095
+
+  commonConfig:
+    path_prefix: /loki
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: boltdb-shipper
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  limits_config:
+    retention_period: 168h
+    ingestion_rate_mb: 50
+    ingestion_burst_size_mb: 100
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+
+  # Override/add boltdb-shipper index settings for filesystem storage.
+  # The chart's default storage_config only wires up the index-gateway client,
+  # which is not used in single-binary filesystem mode.
+  structuredConfig:
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /loki/boltdb-shipper-active
+        cache_location: /loki/boltdb-shipper-cache
+        shared_store: filesystem
+      filesystem:
+        directory: /loki/chunks
+
+singleBinary:
+  replicas: 1
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
+  # The chart hard-codes the storage PVC mount at /var/loki. Loki is configured
+  # to use /loki as the path prefix, so also mount the storage volume there.
+  extraVolumeMounts:
+    - name: storage
+      mountPath: /loki
+
+# Disable components not needed for single-binary filesystem mode.
+gateway:
+  enabled: false
+
+chunksCache:
+  enabled: false
+
+resultsCache:
+  enabled: false
+
+lokiCanary:
+  enabled: false
+
+test:
+  enabled: false
+
+monitoring:
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false
+  alerts:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+
+# Zero out replicas for other deployment modes so they are not deployed.
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+ingester:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+queryScheduler:
+  replicas: 0
+distributor:
+  replicas: 0
+compactor:
+  replicas: 0
+indexGateway:
+  replicas: 0
+bloomCompactor:
+  replicas: 0
+bloomGateway:
+  replicas: 0
