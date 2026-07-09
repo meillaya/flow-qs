@@ -1,0 +1,16 @@
+service: end-to-end-checkout
+slos:
+  - name: success_rate
+    sli:
+      spec: checkout_end_to_end_requests_total{status!~"5.."}
+      total_spec: checkout_end_to_end_requests_total
+    objective: 0.99
+    window: 30d
+    error_budget: 432m0s
+  - name: latency_p99
+    sli:
+      spec: checkout_end_to_end_duration_seconds_bucket{le="2.0"}
+      total_spec: checkout_end_to_end_duration_seconds_count
+    objective: 0.99
+    window: 30d
+    error_budget: 432m0s

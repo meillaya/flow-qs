@@ -1,0 +1,16 @@
+service: order-service
+slos:
+  - name: availability
+    sli:
+      spec: http_server_requests_total{status!~"5.."}
+      total_spec: http_server_requests_total
+    objective: 0.999
+    window: 30d
+    error_budget: 43m12s
+  - name: latency_p99
+    sli:
+      spec: http_server_request_duration_seconds_bucket{le="0.3"}
+      total_spec: http_server_request_duration_seconds_count
+    objective: 0.99
+    window: 30d
+    error_budget: 432m0s
