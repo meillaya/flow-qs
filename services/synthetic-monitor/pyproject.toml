@@ -1,0 +1,60 @@
+[project]
+name = "synthetic-monitor"
+version = "0.1.0"
+description = "In-cluster synthetic health monitor with OTel metrics export"
+readme = "README.md"
+authors = [
+    { name = "Atlas Orchestrator", email = "atlas@oh-my-claudecode.local" },
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "opentelemetry-distro[otlp]>=0.48b0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+    "opentelemetry-exporter-prometheus>=0.48b0",
+    "prometheus-client>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.22.0",
+    "ruff>=0.7.0",
+    "ty>=0.0.57",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.22.0",
+    "ruff>=0.7.0",
+    "ty>=0.0.57",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

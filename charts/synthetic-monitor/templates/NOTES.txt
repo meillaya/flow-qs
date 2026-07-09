@@ -1,0 +1,7 @@
+Synthetic monitor deployed.
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Service: {{ include "syntheticmonitor.fullname" . }}
+
+Metrics endpoint: http://{{ include "syntheticmonitor.fullname" . }}.{{ .Release.Namespace }}:8000/metrics

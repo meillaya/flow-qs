@@ -1,0 +1,1 @@
+"""Synthetic monitor application package."""
