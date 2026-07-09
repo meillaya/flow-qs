@@ -1,0 +1,4 @@
+Service "{{ include "observability-platform.fullname" . }}" deployed.
+
+Access via port-forward:
+  kubectl port-forward svc/{{ include "observability-platform.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
