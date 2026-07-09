@@ -1,0 +1,112 @@
+---
+name: Lint
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  python-lint:
+    name: Python Lint (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - cart-service
+          - catalog-service
+          - checkout-service
+          - inventory-service
+          - order-service
+          - synthetic-monitor
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run Ruff
+        run: uv run ruff check .
+
+      - name: Run ty type check
+        run: uv run ty check .
+
+  go-lint:
+    name: Go Lint (payment-gateway)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/payment-gateway
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/payment-gateway/go.mod
+          cache-dependency-path: services/payment-gateway/go.sum
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61.0
+          working-directory: services/payment-gateway
+          args: --timeout=5m
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+
+      - name: Lint Helm charts
+        run: helm lint charts/*
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/cluster
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
