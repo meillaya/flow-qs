@@ -11,6 +11,8 @@
 ##     -> ["incident-engine","null"]
 ##   curl http://alertmanager.observability:9093/api/v1/routes   | jq '.[].receiver'
 ##     -> "incident-engine"
+##   curl http://alertmanager.observability:9093/api/v1/inhibitRules | jq '.[].source_match.labels.alertname'
+##     -> "ServiceDown"
 ##
 ## Defaults:
 ##   - group_by:  [alertname, service]
@@ -22,9 +24,16 @@
 ##   - incident-engine: webhook -> http://incident-engine.incident.svc:8088/webhook
 ##   - "null": explicit drop receiver; tests + burned/inhibited alerts can be
 ##            routed here to mute them without losing the alert record.
+##
+## Optional environment variable:
+##   - SLACK_WEBHOOK_URL: if set, an additional Slack receiver can be wired in
+##     via a parallel route (not enabled by default to avoid invalid configs).
 
 global:
   resolve_timeout: 5m
+
+templates:
+  - /etc/alertmanager/*.tmpl
 
 route:
   receiver: incident-engine
@@ -37,24 +46,26 @@ route:
     # originating from synthetic injector. The matcher expects a label
     # `severity=dropped-test` (set on incoming alerts via Prom recording rules
     # or alert generators in Task 16/24).
-    - match_re:
-        severity: "dropped-test"
+    - matchers:
+        - severity = "dropped-test"
       receiver: "null"
 
 receivers:
   - name: incident-engine
     webhook_configs:
-      - url: http://incident-engine.incident.svc.cluster.local:8088/webhook
+      - url: http://incident-engine.incident.svc:8088/webhook
         send_resolved: true
         # max_alerts: 0 (default = unbounded) — keep all grouped alerts in one
         # webhook payload so incident-engine can render the full timeline.
 
   - name: "null"
 
-# inhibit_rules intentionally empty here; Task 18 will add them when SLO alert
-# rules are finalised. Keeping the section absent avoids forcing every alert
-# into a single-name namespace.
-inhibit_rules: []
-
-templates:
-  - /etc/alertmanager/*.tmpl
+inhibit_rules:
+  # If a service is fully down, suppress high-error-rate / high-latency noise
+  # for the same service until the ServiceDown alert resolves.
+  - source_matchers:
+      - alertname = "ServiceDown"
+    target_matchers:
+      - alertname =~ "HighErrorRate|HighLatencyP99"
+    equal:
+      - service

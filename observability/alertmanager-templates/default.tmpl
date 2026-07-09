@@ -1,0 +1,47 @@
+{{/*
+  observability/alertmanager-templates/default.tmpl
+  Default notification templates used by Alertmanager receivers.
+  The "incident-engine.payload" template produces a JSON-shaped summary that
+  mirrors the standard Alertmanager webhook payload so the incident-engine
+  service can consume it consistently.
+*/}}
+
+{{ define "default.title" -}}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }} for {{ .GroupLabels.service }}
+{{- end }}
+
+{{ define "default.message" -}}
+{{ range .Alerts -}}
+Alert: {{ .Annotations.summary | default .Labels.alertname }}
+Status: {{ .Status }}
+Severity: {{ .Labels.severity | default "unknown" }}
+Service: {{ .Labels.service | default "unknown" }}
+Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+Annotations: {{ range .Annotations.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+Source: {{ .GeneratorURL }}
+---
+{{ end }}
+{{- end }}
+
+{{ define "incident-engine.payload" -}}
+{
+  "receiver": "{{ .Receiver }}",
+  "status": "{{ .Status }}",
+  "alerts": [
+    {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
+    {
+      "status": "{{ $a.Status }}",
+      "labels": { {{ range $j, $p := $a.Labels.SortedPairs }}{{ if $j }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+      "annotations": { {{ range $j, $p := $a.Annotations.SortedPairs }}{{ if $j }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+      "startsAt": "{{ $a.StartsAt }}",
+      "endsAt": "{{ $a.EndsAt }}",
+      "generatorURL": "{{ $a.GeneratorURL }}"
+    }{{ end }}
+  ],
+  "groupLabels": { {{ range $i, $p := .GroupLabels.SortedPairs }}{{ if $i }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+  "commonLabels": { {{ range $i, $p := .CommonLabels.SortedPairs }}{{ if $i }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+  "commonAnnotations": { {{ range $i, $p := .CommonAnnotations.SortedPairs }}{{ if $i }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+  "externalURL": "{{ .ExternalURL }}",
+  "version": "{{ .Version }}"
+}
+{{- end }}
