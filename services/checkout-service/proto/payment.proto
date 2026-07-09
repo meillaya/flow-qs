@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package payment.v1;
+
+option go_package = "github.com/enten-v2/payment-gateway/proto/payment/v1";
+
+// PaymentService is implemented by payment-gateway. Checkout-service uses
+// Charge and Refund; order-service uses GetPaymentStatus.
+service PaymentService {
+  rpc Charge(ChargeRequest) returns (ChargeResponse);
+  rpc Refund(RefundRequest) returns (RefundResponse);
+  rpc GetPaymentStatus(GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+}
+
+message ChargeRequest {
+  string order_id = 1;
+  int64 amount_cents = 2;
+  string card_token = 3;
+}
+
+message ChargeResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_APPROVED = 1;
+    STATUS_DECLINED = 2;
+  }
+  Status status = 1;
+  string charge_id = 2;
+  string reason = 3; // populated when status == STATUS_DECLINED
+}
+
+message RefundRequest {
+  string charge_id = 1;
+}
+
+message RefundResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_OK = 1;
+    STATUS_NOT_FOUND = 2;
+  }
+  Status status = 1;
+}
+
+message GetPaymentStatusRequest {
+  string order_id = 1;
+}
+
+message GetPaymentStatusResponse {
+  string order_id = 1;
+  string status = 2; // pending | succeeded | failed | refunded
+  string transaction_id = 3;
+}

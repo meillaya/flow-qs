@@ -1,0 +1,65 @@
+# Default values for checkout-service.
+# Saga-style orchestrator: cart HTTP -> inventory gRPC -> payment gRPC -> order HTTP.
+# Includes a chaos toggle (FAILURE_INJECTION_RATE) for demos.
+
+# -- Human-readable service name; used for OTEL_SERVICE_NAME and selectors.
+serviceName: checkout-service
+
+image:
+  # -- Container image repository.
+  repository: k3d-observability-registry:5000/checkout-service
+  # -- Container image tag.
+  tag: dev
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Number of replicas.
+replicaCount: 1
+
+service:
+  # -- Service port exposed inside the cluster.
+  port: 8003
+  # -- Container port the application listens on.
+  targetPort: 8003
+
+probes:
+  liveness:
+    # -- HTTP path for the liveness probe.
+    path: /healthz
+  readiness:
+    # -- HTTP path for the readiness probe.
+    path: /readyz
+
+resources:
+  # -- Minimum resources guaranteed to the container.
+  requests:
+    memory: "256Mi"
+    cpu: "256m"
+  # -- Maximum resources the container may use.
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# -- Extra environment variables supplied as key/value pairs.
+# These are rendered into a ConfigMap and injected into the container.
+env:
+  # Address of the cart-service REST endpoint.
+  CART_SERVICE_URL: "http://cart-service:8000"
+  # Address of the order-service REST endpoint.
+  ORDER_SERVICE_URL: "http://order-service:8004"
+  # gRPC addresses for the inventory and payment services.
+  INVENTORY_GRPC_ADDR: "inventory-service:50051"
+  PAYMENT_GRPC_ADDR: "payment-gateway:50052"
+  # Chaos toggle: probability in [0.0, 1.0] of injecting a checkout failure.
+  # Set to 0.0 (default) for normal operation; bump to 0.5-1.0 for demos.
+  FAILURE_INJECTION_RATE: "0.0"
+  # Set to "true" so /readyz only returns 200 when all downstreams respond.
+  # Set to "false" for grace periods during deployments.
+  STRICT_READINESS: "true"
+
+# -- ServiceAccount configuration.
+serviceAccount:
+  # -- Specifies whether a ServiceAccount should be created.
+  create: true
+  # -- The name of the ServiceAccount to use.
+  name: ""

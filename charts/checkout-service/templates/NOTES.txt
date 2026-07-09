@@ -1,0 +1,14 @@
+checkout-service has been deployed.
+
+Get the service URL:
+{{- if eq .Values.service.type "ClusterIP" }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "observability-platform.fullname" . }} 8003:8003
+{{- end }}
+
+Try a checkout:
+  curl -X POST http://localhost:8003/checkout \
+    -H "Content-Type: application/json" \
+    -d '{"user_id": "alice", "payment_method": "card"}'
+
+To inject chaos, set FAILURE_INJECTION_RATE to e.g. 0.5:
+  helm upgrade checkout-service . --set env.FAILURE_INJECTION_RATE=0.5

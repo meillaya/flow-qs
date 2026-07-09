@@ -1,0 +1,12 @@
+.omo/
+.omo/evidence/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/orders.db
+
