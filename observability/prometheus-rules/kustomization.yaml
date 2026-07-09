@@ -1,0 +1,39 @@
+## observability/prometheus-rules/kustomization.yaml
+##
+## Kustomization wrapping the recording + alert rule files as ConfigMaps.
+## Apply with::
+##
+##     kubectl apply -k observability/prometheus-rules/
+##
+## The resulting ConfigMaps (one per file, prefixed ``prom-rules-``) can be
+## mounted into the Prometheus server pod at ``/etc/prometheus/rules/`` and
+## referenced from ``prometheus.yml`` via ``rule_files:`` once the Helm
+## ``server.configMapOverrideName`` pipeline is wired (Task 6/22 follow-up).
+## Until then these ConfigMaps are ready to be consumed by either the
+## ``prometheus-config`` ConfigMap editor or by the
+## prometheus-operator ``PrometheusRule`` CRD.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: observability
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: observability-platform
+      app.kubernetes.io/component: prometheus-rules
+
+configMapGenerator:
+  - name: prom-rules-recording
+    files:
+      - sli_recording_rules.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: prom-rules-alerts
+    files:
+      - alert_rules.yaml
+    options:
+      disableNameSuffixHash: true
+
+resources: []

@@ -1,0 +1,940 @@
+groups:
+  - name: sli_recording_rules_cart_service
+    interval: 30s
+    rules:
+      - record: sli:cart-service:availability:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[5m])
+          )
+      - record: sli:cart-service:availability:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[30m])
+          )
+      - record: sli:cart-service:availability:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[1h])
+          )
+      - record: sli:cart-service:availability:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[6h])
+          )
+      - record: sli:cart-service:availability:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[1d])
+          )
+      - record: sli:cart-service:availability:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[3d])
+          )
+      - record: sli:cart-service:availability:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="cart-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="cart-service"}[30d])
+          )
+      - record: slo:cart-service:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:cart-service:availability:ratio_30d) / (1 - 0.999)
+          )) * 100
+      - record: sli:cart-service:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[5m])
+          )
+      - record: sli:cart-service:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[30m])
+          )
+      - record: sli:cart-service:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[1h])
+          )
+      - record: sli:cart-service:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[6h])
+          )
+      - record: sli:cart-service:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[1d])
+          )
+      - record: sli:cart-service:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[3d])
+          )
+      - record: sli:cart-service:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="cart-service"}[30d])
+          )
+  - name: sli_recording_rules_catalog_service
+    interval: 30s
+    rules:
+      - record: sli:catalog-service:availability:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[5m])
+          )
+      - record: sli:catalog-service:availability:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[30m])
+          )
+      - record: sli:catalog-service:availability:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[1h])
+          )
+      - record: sli:catalog-service:availability:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[6h])
+          )
+      - record: sli:catalog-service:availability:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[1d])
+          )
+      - record: sli:catalog-service:availability:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[3d])
+          )
+      - record: sli:catalog-service:availability:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="catalog-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="catalog-service"}[30d])
+          )
+      - record: slo:catalog-service:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:catalog-service:availability:ratio_30d) / (1 - 0.9995)
+          )) * 100
+      - record: sli:catalog-service:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[5m])
+          )
+      - record: sli:catalog-service:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[30m])
+          )
+      - record: sli:catalog-service:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[1h])
+          )
+      - record: sli:catalog-service:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[6h])
+          )
+      - record: sli:catalog-service:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[1d])
+          )
+      - record: sli:catalog-service:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[3d])
+          )
+      - record: sli:catalog-service:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[30d])
+          )
+  - name: sli_recording_rules_checkout_service
+    interval: 30s
+    rules:
+      - record: sli:checkout-service:availability:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[5m])
+          )
+      - record: sli:checkout-service:availability:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[30m])
+          )
+      - record: sli:checkout-service:availability:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[1h])
+          )
+      - record: sli:checkout-service:availability:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[6h])
+          )
+      - record: sli:checkout-service:availability:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[1d])
+          )
+      - record: sli:checkout-service:availability:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[3d])
+          )
+      - record: sli:checkout-service:availability:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="checkout-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="checkout-service"}[30d])
+          )
+      - record: slo:checkout-service:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:checkout-service:availability:ratio_30d) / (1 - 0.999)
+          )) * 100
+      - record: sli:checkout-service:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[5m])
+          )
+      - record: sli:checkout-service:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[30m])
+          )
+      - record: sli:checkout-service:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[1h])
+          )
+      - record: sli:checkout-service:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[6h])
+          )
+      - record: sli:checkout-service:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[1d])
+          )
+      - record: sli:checkout-service:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[3d])
+          )
+      - record: sli:checkout-service:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[30d])
+          )
+  - name: sli_recording_rules_end_to_end_checkout
+    interval: 30s
+    rules:
+      - record: sli:end-to-end-checkout:availability:ratio_5m
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[5m])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[5m])
+          )
+      - record: sli:end-to-end-checkout:availability:ratio_30m
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[30m])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[30m])
+          )
+      - record: sli:end-to-end-checkout:availability:ratio_1h
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[1h])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[1h])
+          )
+      - record: sli:end-to-end-checkout:availability:ratio_6h
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[6h])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[6h])
+          )
+      - record: sli:end-to-end-checkout:availability:ratio_1d
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[1d])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[1d])
+          )
+      - record: sli:end-to-end-checkout:availability:ratio_3d
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[3d])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[3d])
+          )
+      - record: sli:end-to-end-checkout:availability:ratio_30d
+        expr: |
+          sum(
+            rate(checkout_end_to_end_requests_total{status!~"5..", service_name="end-to-end-checkout"}[30d])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[30d])
+          )
+      - record: slo:end-to-end-checkout:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:end-to-end-checkout:availability:ratio_30d) / (1 - 0.99)
+          )) * 100
+      - record: sli:end-to-end-checkout:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[5m])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[5m])
+          )
+      - record: sli:end-to-end-checkout:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[30m])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[30m])
+          )
+      - record: sli:end-to-end-checkout:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[1h])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[1h])
+          )
+      - record: sli:end-to-end-checkout:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[6h])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[6h])
+          )
+      - record: sli:end-to-end-checkout:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[1d])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[1d])
+          )
+      - record: sli:end-to-end-checkout:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[3d])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[3d])
+          )
+      - record: sli:end-to-end-checkout:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[30d])
+          )
+          /
+          sum(
+            rate(checkout_end_to_end_duration_seconds_count{service_name="end-to-end-checkout"}[30d])
+          )
+  - name: sli_recording_rules_inventory_service
+    interval: 30s
+    rules:
+      - record: sli:inventory-service:availability:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[5m])
+          )
+      - record: sli:inventory-service:availability:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[30m])
+          )
+      - record: sli:inventory-service:availability:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[1h])
+          )
+      - record: sli:inventory-service:availability:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[6h])
+          )
+      - record: sli:inventory-service:availability:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[1d])
+          )
+      - record: sli:inventory-service:availability:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[3d])
+          )
+      - record: sli:inventory-service:availability:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="inventory-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="inventory-service"}[30d])
+          )
+      - record: slo:inventory-service:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:inventory-service:availability:ratio_30d) / (1 - 0.9995)
+          )) * 100
+      - record: sli:inventory-service:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[5m])
+          )
+      - record: sli:inventory-service:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[30m])
+          )
+      - record: sli:inventory-service:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[1h])
+          )
+      - record: sli:inventory-service:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[6h])
+          )
+      - record: sli:inventory-service:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[1d])
+          )
+      - record: sli:inventory-service:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[3d])
+          )
+      - record: sli:inventory-service:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[30d])
+          )
+  - name: sli_recording_rules_order_service
+    interval: 30s
+    rules:
+      - record: sli:order-service:availability:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[5m])
+          )
+      - record: sli:order-service:availability:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[30m])
+          )
+      - record: sli:order-service:availability:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[1h])
+          )
+      - record: sli:order-service:availability:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[6h])
+          )
+      - record: sli:order-service:availability:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[1d])
+          )
+      - record: sli:order-service:availability:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[3d])
+          )
+      - record: sli:order-service:availability:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="order-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="order-service"}[30d])
+          )
+      - record: slo:order-service:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:order-service:availability:ratio_30d) / (1 - 0.999)
+          )) * 100
+      - record: sli:order-service:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[5m])
+          )
+      - record: sli:order-service:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[30m])
+          )
+      - record: sli:order-service:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[1h])
+          )
+      - record: sli:order-service:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[6h])
+          )
+      - record: sli:order-service:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[1d])
+          )
+      - record: sli:order-service:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[3d])
+          )
+      - record: sli:order-service:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="order-service"}[30d])
+          )
+  - name: sli_recording_rules_payment_gateway
+    interval: 30s
+    rules:
+      - record: sli:payment-gateway:availability:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[5m])
+          )
+      - record: sli:payment-gateway:availability:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[30m])
+          )
+      - record: sli:payment-gateway:availability:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[1h])
+          )
+      - record: sli:payment-gateway:availability:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[6h])
+          )
+      - record: sli:payment-gateway:availability:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[1d])
+          )
+      - record: sli:payment-gateway:availability:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[3d])
+          )
+      - record: sli:payment-gateway:availability:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_requests_total{status!~"5..", service_name="payment-gateway"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_requests_total{service_name="payment-gateway"}[30d])
+          )
+      - record: slo:payment-gateway:availability:error_budget_remaining:30d
+        expr: |
+          (1 - (
+            (1 - sli:payment-gateway:availability:ratio_30d) / (1 - 0.995)
+          )) * 100
+      - record: sli:payment-gateway:latency_p99:ratio_5m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[5m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[5m])
+          )
+      - record: sli:payment-gateway:latency_p99:ratio_30m
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[30m])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[30m])
+          )
+      - record: sli:payment-gateway:latency_p99:ratio_1h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[1h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[1h])
+          )
+      - record: sli:payment-gateway:latency_p99:ratio_6h
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[6h])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[6h])
+          )
+      - record: sli:payment-gateway:latency_p99:ratio_1d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[1d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[1d])
+          )
+      - record: sli:payment-gateway:latency_p99:ratio_3d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[3d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[3d])
+          )
+      - record: sli:payment-gateway:latency_p99:ratio_30d
+        expr: |
+          sum(
+            rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[30d])
+          )
+          /
+          sum(
+            rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[30d])
+          )
+
