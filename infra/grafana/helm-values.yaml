@@ -1,0 +1,117 @@
+# ----------------------------------------------------------------------------
+# Grafana Helm values — observability stack (Task 7)
+# Chart: grafana/grafana (https://github.com/grafana/helm-charts/tree/main/charts/grafana)
+#
+# Demo / local-cluster only. Do NOT use the admin password outside demos.
+# Dashboards are provisioned by Task 17 — datasource sidecar below only defines
+# where to look for them; provisioning them is deferred.
+# ----------------------------------------------------------------------------
+
+# ---- Image / version -------------------------------------------------------
+image:
+  repository: grafana/grafana
+  tag: ""                # pin in version-controlled deployments
+  pullPolicy: IfNotPresent
+
+# ---- Admin auth (demo only) ------------------------------------------------
+# NOTE: adminPassword is intentionally "admin" for the local demo cluster.
+# Do NOT enable OAuth/SSO here — it is explicitly out of scope for this task.
+adminUser: admin
+adminPassword: admin
+
+# ---- Persistence ------------------------------------------------------------
+persistence:
+  enabled: true
+  size: 5Gi
+  # accessModes: [ReadWriteOnce]
+  # storageClassName: ""   # leave empty to use the cluster default
+
+# ---- Service ---------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+  name: grafana
+
+# ---- ServiceAccount --------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+
+# ---- Grafana server config (grafana.ini) -----------------------------------
+# We intentionally do NOT enable alerting in Grafana itself; routing is handled
+# by Alertmanager. OAuth/SSO is OFF (admin/admin is fine for the demo).
+grafana.ini:
+  server:
+    root_url: ""
+    serve_from_sub_path: false
+  # `security.admin_*` are derived from adminUser / adminPassword above by
+  # the chart; setting them here triggers a "leaked secret" helm lint info.
+  unified_alerting:
+    enabled: false
+  users:
+    allow_sign_up: false
+  auth:
+    oauth_auto_redirect: false
+
+# ---- Sidecars: provisioning ------------------------------------------------
+# Sidecar.datasources watches for ConfigMaps labelled `grafana_datasource` and
+# loads them as datasources.
+# Sidecar.dashboards watches for ConfigMaps labelled `grafana_dashboard` and
+# mounts them under the path configured below. Task 17 owns the actual
+# dashboard JSON files.
+sidecar:
+  datasources:
+    enabled: true
+    label: grafana_datasource
+    # Path inside the pod where datasource ConfigMaps are projected.
+    searchNamespace: ""
+    resources: {}
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    folder: /var/lib/grafana/dashboards
+    searchNamespace: ""
+    # Mount the dashboards dir + subdirs (Task 17 will populate
+    # /var/lib/grafana/dashboards/ecom/).
+    foldersFromFilesStructure: true
+    resources: {}
+
+# Default dashboard provider / baseline mount so sidecars have a target path.
+# Task 17 adds real dashboards under /var/lib/grafana/dashboards/ecom/.
+dashboardsConfigMaps: {}
+dashboardsSecret: {}
+
+# ---- Resource limits (sane demo defaults) -----------------------------------
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# ---- Liveness / readiness ---------------------------------------------------
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 3000
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 3000
+  initialDelaySeconds: 15
+  timeoutSeconds: 5
+
+# ---- Scheduling ------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ---- Test connection probes -------------------------------------------------
+# Disable the image-renderer sidecar (Task 7 MUST NOT add external image
+# rendering). We don't ship a separate image-renderer deployment.
+imageRenderer:
+  enabled: false

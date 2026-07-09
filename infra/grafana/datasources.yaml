@@ -1,0 +1,133 @@
+# ----------------------------------------------------------------------------
+# Grafana provisioned datasources — observability stack (Task 7)
+#
+# This file is loaded as a ConfigMap by the grafana/grafana Helm chart's
+# sidecar.datasources (label: grafana_datasource). It is the Source-of-Truth
+# for which data sources Grafana knows about.
+#
+# Correlation wiring:
+#   Prometheus (default) ←─ exemplar traceId ─→ Tempo
+#   Tempo ── tracesToLogsV2 (tag=traceId) ──→ Loki
+#   Loki is the join target for logs and is also reachable from Explore.
+#   Alertmanager is included for ad-hoc alert inspection.
+#
+# NOTE: "uid" is stable — changing it will break existing dashboard links.
+# Dashboards that reference these UIDs are produced in Task 17.
+# ----------------------------------------------------------------------------
+
+apiVersion: 1
+
+datasources:
+
+  # =========================================================
+  # Prometheus — default datasource; metrics entry point.
+  #   - exemplar traceId links → Tempo (exemplarTraceIdDestinations)
+  #   - tracesToLogsV2 → Loki as a fallback (exemplars with log context)
+  # =========================================================
+  - name: Prometheus
+    uid: prometheus-observability
+    type: prometheus
+    access: proxy
+    orgId: 1
+    isDefault: true
+    url: http://prometheus.observability:9090
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 30s
+      queryTimeout: 60s
+      manageAlerts: false
+      prometheusType: Prometheus
+      # Prom exemplar traceId → opens Tempo at /a/grafana -> Tempo
+      exemplarTraceIdDestinations:
+        - name: traceID
+          datasourceUid: tempo-observability
+          url: '$${__value}'
+      # Optional but recommended: same correlation surface as Tempo→Loki.
+      # If an exemplar already carries log-relevant labels, this lets users
+      # hop from a metric exemplar to a Loki log slice.
+      tracesToLogsV2:
+        datasourceUid: loki-observability
+        tags:
+          - key: traceId
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        customQuery: false
+        query: ''
+        filterBySpanID: false
+        filterByTraceID: true
+
+  # =========================================================
+  # Tempo — traces entry point; tracesToLogsV2 → Loki.
+  # =========================================================
+  - name: Tempo
+    uid: tempo-observability
+    type: tempo
+    access: proxy
+    orgId: 1
+    isDefault: false
+    url: http://tempo.observability:3200
+    editable: false
+    jsonData:
+      httpMethod: GET
+      tracesToLogsV2:
+        datasourceUid: loki-observability
+        tags:
+          - key: traceId
+            value: ''
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        customQuery: false
+        query: ''
+        filterBySpanID: false
+        filterByTraceID: true
+      serviceMap:
+        datasourceUid: prometheus-observability
+      nodeGraph:
+        enabled: true
+      streamingEnabled:
+        search: true
+        metrics: true
+        logs: false
+    # No credentials — Tempo's OTLP/HTTP endpoint is internal to the cluster.
+
+  # =========================================================
+  # Loki — logs entry point; used as the join target for
+  # both Tempo (trace-to-logs) and Prometheus exemplars.
+  # =========================================================
+  - name: Loki
+    uid: loki-observability
+    type: loki
+    access: proxy
+    orgId: 1
+    isDefault: false
+    url: http://loki.observability:3100
+    editable: false
+    jsonData:
+      httpMethod: GET
+      queryTimeout: 60s
+      maxLines: 1000
+      # Derived fields let users click a traceId in a log line and jump
+      # straight to the trace in Tempo.
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"traceId":"?([a-f0-9]{16,64})"?'
+          url: '$${__value}'
+
+  # =========================================================
+  # Alertmanager — read-only alert inspection.
+  # Grafana's own unified alerting is intentionally disabled in helm-values.yaml
+  # so this is the only alerting surface reachable from the UI.
+  # =========================================================
+  - name: Alertmanager
+    uid: alertmanager-observability
+    type: alertmanager
+    access: proxy
+    orgId: 1
+    isDefault: false
+    url: http://alertmanager.observability:9093
+    editable: false
+    jsonData:
+      httpMethod: GET
+      handleGrafanaManagedAlerts: false
+      prometheusType: Prometheus
