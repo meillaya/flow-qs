@@ -1,0 +1,37 @@
+# Overrides for the catalog-service wrapper chart.
+
+svc-template:
+  # -- Service name used for selectors and OTEL_SERVICE_NAME.
+  serviceName: catalog-service
+
+  image:
+    repository: k3d-observability-registry:5000/catalog-service
+    tag: dev
+    pullPolicy: Always
+
+  replicaCount: 1
+
+  service:
+    port: 8000
+    targetPort: 8000
+
+  probes:
+    liveness:
+      path: /healthz
+    readiness:
+      path: /readyz
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  env:
+    CATALOG_DB_PATH: "/data/catalog.db"
+
+  serviceAccount:
+    create: true
+    name: ""

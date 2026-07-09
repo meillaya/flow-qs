@@ -1,0 +1,10 @@
+apiVersion: v2
+name: catalog-service
+description: Catalog service Helm chart wrapping the svc-template umbrella chart
+version: 0.1.0
+appVersion: "0.1.0"
+type: application
+dependencies:
+  - name: svc-template
+    version: 0.1.0
+    repository: file://../svc-template

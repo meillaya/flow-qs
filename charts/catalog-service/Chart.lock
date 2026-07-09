@@ -1,0 +1,6 @@
+dependencies:
+- name: svc-template
+  repository: file://../svc-template
+  version: 0.1.0
+digest: sha256:c020ccc0f89614f0fa0a1169a60c33850b2d14b23c780306c4cc479255fb87d5
+generated: "2026-07-09T17:38:37.828911495-04:00"
