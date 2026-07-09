@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package payment.v1;
+
+option go_package = "github.com/enten-v2/payment-gateway/proto/payment/v1";
+
+service PaymentService {
+  rpc GetPaymentStatus(GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+}
+
+message GetPaymentStatusRequest {
+  string order_id = 1;
+}
+
+message GetPaymentStatusResponse {
+  string order_id = 1;
+  string status = 2;  // pending | succeeded | failed | refunded
+  string transaction_id = 3;
+}

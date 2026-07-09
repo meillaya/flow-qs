@@ -1,0 +1,52 @@
+# Default values for order-service.
+# FastAPI + SQLite + OTel + gRPC client for order management.
+
+# -- Human-readable service name; used for OTEL_SERVICE_NAME and selectors.
+serviceName: order-service
+
+image:
+  # -- Container image repository.
+  repository: k3d-observability-registry:5000/order-service
+  # -- Container image tag.
+  tag: dev
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Number of replicas.
+replicaCount: 1
+
+service:
+  # -- Service port exposed inside the cluster.
+  port: 8004
+  # -- Container port the application listens on.
+  targetPort: 8004
+
+probes:
+  liveness:
+    # -- HTTP path for the liveness probe.
+    path: /healthz
+  readiness:
+    # -- HTTP path for the readiness probe.
+    path: /readyz
+
+resources:
+  # -- Minimum resources guaranteed to the container.
+  requests:
+    memory: "256Mi"
+    cpu: "256m"
+  # -- Maximum resources the container may consume.
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# -- Extra environment variables supplied as key/value pairs.
+# These are rendered into a ConfigMap and injected into the container.
+env:
+  DB_PATH: /data/orders.db
+
+# -- ServiceAccount configuration.
+serviceAccount:
+  # -- Specifies whether a ServiceAccount should be created.
+  create: true
+  # -- The name of the ServiceAccount to use.
+  name: ""
