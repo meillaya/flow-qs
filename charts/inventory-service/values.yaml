@@ -1,0 +1,53 @@
+# Default values for inventory-service.
+
+# -- Human-readable service name; used for OTEL_SERVICE_NAME and selectors.
+serviceName: inventory-service
+
+image:
+  # -- Container image repository.
+  repository: k3d-observability-registry:5000/inventory-service
+  # -- Container image tag.
+  tag: "dev"
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Number of replicas.
+replicaCount: 1
+
+service:
+  # -- HTTP service port exposed inside the cluster.
+  port: 8001
+  # -- Container port the HTTP application listens on.
+  targetPort: 8001
+
+# -- gRPC service port for internal service-to-service calls.
+grpcPort: 50051
+
+probes:
+  liveness:
+    # -- HTTP path for the liveness probe.
+    path: /healthz
+  readiness:
+    # -- HTTP path for the readiness probe.
+    path: /readyz
+
+resources:
+  # -- Minimum resources guaranteed to the container.
+  requests:
+    memory: "256Mi"
+    cpu: "256m"
+  # -- Maximum resources the container may consume.
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# -- Extra environment variables supplied as key/value pairs.
+# These are rendered into a ConfigMap and injected into the container.
+env: {}
+
+# -- ServiceAccount configuration.
+serviceAccount:
+  # -- Specifies whether a ServiceAccount should be created.
+  create: true
+  # -- The name of the ServiceAccount to use.
+  name: ""
