@@ -1,0 +1,59 @@
+# Helm values override for Grafana Tempo (grafana/tempo).
+# Local filesystem storage for demo/traces; 7-day retention.
+# Deploy: helm upgrade --install tempo grafana/tempo -n observability -f helm-values.yaml --create-namespace
+
+tempo:
+  # Disable anonymous usage reporting and multitenancy for local demo.
+  reportingEnabled: false
+  multitenancyEnabled: false
+
+  # 7-day trace retention (168h). This is fed into compactor.compaction.block_retention.
+  retention: 168h
+
+  # No query duration limit for demo exploration.
+  querier:
+    max_query_duration: 0
+
+  # Local filesystem trace storage. The chart mounts a single PVC at /var/tempo,
+  # so /var/tempo/traces and /var/tempo/wal live on the same persistent volume.
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+  # Server listens on the default 3200 port; the Service exposes it as
+  # "tempo-prom-metrics". OTLP gRPC (4317) and OTLP HTTP (4318) are also exposed
+  # by the Service for the OpenTelemetry Collector.
+  server:
+    http_listen_port: 3200
+
+  # Metrics generator is intentionally disabled; Prometheus handles metrics.
+  metricsGenerator:
+    enabled: false
+
+  # Minimal resources for a single-replica demo deployment.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# Single replica is sufficient for local filesystem demo storage.
+replicas: 1
+
+# Persist traces + WAL on a 10Gi PVC using k3d's default local-path StorageClass.
+# volumeMode: Filesystem is enforced via the kustomize overlay in kustomization.yaml.
+persistence:
+  enabled: true
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+
+service:
+  type: ClusterIP
