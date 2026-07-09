@@ -1,0 +1,22 @@
+apiVersion: v2
+name: otel-collector
+description: OpenTelemetry Collector — traces/logs/metrics gateway for the enten observability platform.
+type: application
+version: 0.1.0
+appVersion: "0.104.0"
+home: https://opentelemetry.io/docs/collector/
+sources:
+  - https://github.com/open-telemetry/opentelemetry-collector
+maintainers:
+  - name: enten-platform
+    email: platform@enten.local
+keywords:
+  - opentelemetry
+  - otel
+  - observability
+  - traces
+  - metrics
+  - logs
+  - tempo
+  - loki
+  - prometheus

@@ -1,0 +1,49 @@
+# Kustomize overlay for the OpenTelemetry Collector.
+#
+# This kustomization is the top-level entry point — apply it with:
+#
+#   kubectl apply -k infra/otel-collector/
+#
+# It composes two sources of truth:
+#
+#   1. configmap.yaml  — the standalone, source-of-truth collector pipeline
+#      config (rendered as a Kubernetes ConfigMap). Use this when you want
+#      to deploy *just* the pipeline config without the rest of the chart
+#      (e.g., for ConfigMap-only rollouts).
+#
+#   2. The Helm chart   — the chart owns the Deployment, Service,
+#      ServiceAccount, and (default) the inlined ConfigMap. Deploy it with:
+#
+#         helm install otel-collector ./infra/otel-collector/helm \
+#           --namespace observability --create-namespace
+#
+#      The chart by default re-creates a configmap from `.Values.collectorConfig`
+#      with the same data as configmap.yaml above. To make the chart use this
+#      kustomize-managed configmap as the source of truth instead, install
+#      the chart with `-f /dev/stdin` overriding `collectorConfig: ""` and
+#      point the deployment at the externally-managed configmap (a future
+#      values toggle; the chart today still owns the configmap).
+#
+# In other words: the chart and the standalone configmap.yaml are kept in
+# sync by hand (see values.yaml `collectorConfig:` and the top-level
+# configmap.yaml `data.collector.yaml:`). Kustomize here is the entry
+# point for *config-only* rollouts and for namespace+label application.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Apply into the observability namespace.
+namespace: observability
+
+# Stable, common labels stamped on every resource.
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/name: otel-collector
+      app.kubernetes.io/component: collector
+      app.kubernetes.io/part-of: observability-platform
+      app.kubernetes.io/managed-by: kustomize
+
+# Canonical pipeline ConfigMap. Kustomize re-renders it with the namespace
+# and labels above.
+resources:
+  - configmap.yaml
