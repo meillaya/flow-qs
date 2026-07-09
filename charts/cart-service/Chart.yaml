@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cart-service
+description: Helm chart for the Enten v2 cart-service (FastAPI + in-memory state + OTel)
+version: 0.1.0
+appVersion: "0.1.0"
+type: application

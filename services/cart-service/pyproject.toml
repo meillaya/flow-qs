@@ -1,0 +1,60 @@
+[project]
+name = "cart-service"
+version = "0.1.0"
+description = "Cart service with FastAPI + in-memory state + OTel"
+readme = "README.md"
+authors = [
+    { name = "Atlas Orchestrator", email = "atlas@oh-my-claudecode.local" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "requests>=2.32.0",
+    "httpx>=0.27.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-distro[otlp]>=0.48b0",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "opentelemetry-instrumentation-requests>=0.48b0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2.0",
+    "httpx>=0.27.0",
+    "ruff>=0.5.0",
+    "ty>=0.0.50",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ty.src]
+exclude = ["tests"]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+include = ["app"]
+ignore = ["tests", ".venv"]
+reportAny = "none"
+reportExplicitAny = "none"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
