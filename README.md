@@ -83,3 +83,5 @@ make clean       # remove Terraform state and local artifacts
 - Multi-window multi-burn-rate alerts reduce noise: fast-burn pages catch emergencies, slow-burn tickets catch budget drift.
 - Running k6 as a Kubernetes Job keeps load generation inside the cluster network and avoids host-side port conflicts.
 - A hand-off between Alertmanager and the incident engine via webhook is enough for demo-grade automated postmortems; no UI needed.
+- Demo orchestration needs a hard watchdog timeout (15 min subshell SIGTERM), trap-based cleanup on Ctrl+C, and a fallback postmortem path so the artifact pipeline still produces content when the incident-engine is not yet deployed.
+- Parsing k6 stdout with a Python heredoc is a reliable fallback for extracting p95/error-rate when the in-pod `/tmp/results.json` is unreachable after Job termination.
