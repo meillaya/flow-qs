@@ -1403,7 +1403,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `services/payment-gateway/*`, `charts/payment-gateway/*`, `Dockerfile`
   - Pre-commit: `go vet ./... && golangci-lint run && go test ./...`
 
-- [ ] 15. SLO definitions per service with availability + latency objectives + error budgets
+- [x] 15. SLO definitions per service with availability + latency objectives + error budgets
 
   **What to do**:
   - Create `slo/` directory with one YAML file per service:
@@ -1487,7 +1487,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `slo/*.yaml`, `slo/README.md`, `scripts/validate_slo.py`
   - Pre-commit: `uv run python scripts/validate_slo.py slo/*.yaml`
 
-- [ ] 16. Prometheus recording rules + multi-window multi-burn-rate alert rules
+- [x] 16. Prometheus recording rules + multi-window multi-burn-rate alert rules
 
   **What to do**:
   - Create `observability/prometheus-rules/sli_recording_rules.yaml`:
@@ -1570,7 +1570,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `observability/prometheus-rules/*.yaml`, `scripts/verify_mwmb.py`
   - Pre-commit: `promtool check rules observability/prometheus-rules/*.yaml`
 
-- [ ] 17. 5 provisioned Grafana dashboards (Service Overview, RED per-service, Trace Explorer, Log Explorer, SLO Status)
+- [x] 17. 5 provisioned Grafana dashboards (Service Overview, RED per-service, Trace Explorer, Log Explorer, SLO Status)
 
   **What to do**:
   - Create `dashboards/` directory with 5 dashboard JSON files (exported from Grafana):
@@ -1714,7 +1714,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `infra/prometheus/alertmanager-config.yaml`, `observability/alertmanager-templates/default.tmpl`
   - Pre-commit: `amtool check-config infra/prometheus/alertmanager-config.yaml`
 
-- [ ] 19. Synthetic monitor (Python script running in-cluster, hits /healthz on all services)
+- [x] 19. Synthetic monitor (Python script running in-cluster, hits /healthz on all services)
 
   **What to do**:
   - Create `services/synthetic-monitor/`:
@@ -1775,7 +1775,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `services/synthetic-monitor/*`, `charts/synthetic-monitor/*`
   - Pre-commit: `ruff check . && ty check . && pytest`
 
-- [ ] 20. Chaos Mesh installation + RBAC + 4 experiment manifests
+- [x] 20. Chaos Mesh installation + RBAC + 4 experiment manifests
 
   **What to do**:
   - Install Chaos Mesh in `chaos-testing` namespace:
@@ -1858,7 +1858,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `chaos/experiments/*.yaml`, `chaos/README.md`, `chaos/Makefile`
   - Pre-commit: `kubectl apply --dry-run=server -f chaos/experiments/*.yaml`
 
-- [ ] 21. k6 scripts (smoke, load, stress, spike) + k6 Job template
+- [x] 21. k6 scripts (smoke, load, stress, spike) + k6 Job template
 
   **What to do**:
   - Create `load/k6/` directory with 4 JS scripts:
@@ -2299,7 +2299,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `README.md`, `docs/*.md`, `docs/examples/postmortems/*.md`
   - Pre-commit: `bash -c 'for f in $(find docs -name "*.md"); do test -s "$f"; done'`
 
-- [ ] 26. GitHub Actions workflows (lint, type-check, test, build images)
+- [x] 26. GitHub Actions workflows (lint, type-check, test, build images)
 
   **What to do**:
   - Create `.github/workflows/lint.yaml`:
