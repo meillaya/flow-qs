@@ -1929,7 +1929,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `load/k6/*.js`, `load/k6-job-*.yaml`, `load/Makefile`, `load/README.md`
   - Pre-commit: `node --check load/k6/*.js || true`
 
-- [ ] 22. incident-engine Python service (Alertmanager webhook → postmortem.md)
+- [x] 22. incident-engine Python service (Alertmanager webhook → postmortem.md)
 
   **What to do**:
   - Create `services/incident-engine/`:
@@ -2047,7 +2047,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `services/incident-engine/*`, `charts/incident-engine/*`
   - Pre-commit: `ruff check . && ty check . && pytest`
 
-- [ ] 23. End-to-end deployment verification (devenv up → all services healthy → telemetry flowing)
+- [x] 23. End-to-end deployment verification (devenv up → all services healthy → telemetry flowing)
 
   **What to do**:
   - Add to `Makefile`:
@@ -2136,7 +2136,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `Makefile`, `scripts/verify.sh`, `docs/SETUP.md`
   - Pre-commit: `bash -n scripts/verify.sh`
 
-- [ ] 24. make demo orchestration script (load → chaos → wait → verify postmortem)
+- [x] 24. make demo orchestration script (load → chaos → wait → verify postmortem)
 
   **What to do**:
   - Add `make demo` target that orchestrates a full end-to-end demonstration:
@@ -2205,7 +2205,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `Makefile` (update), `docs/DEMO.md`
   - Pre-commit: `bash -n Makefile`
 
-- [ ] 25. Documentation (README, ARCHITECTURE, RUNBOOK, postmortem examples)
+- [x] 25. Documentation (README, ARCHITECTURE, RUNBOOK, postmortem examples)
 
   **What to do**:
   - `README.md` (repo root):
