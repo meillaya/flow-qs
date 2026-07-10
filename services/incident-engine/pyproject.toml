@@ -1,0 +1,64 @@
+[project]
+name = "incident-engine"
+version = "0.1.0"
+description = "Alertmanager webhook receiver that correlates Tempo/Loki/Prometheus context and emits postmortem.md"
+readme = "README.md"
+authors = [
+    { name = "Atlas Orchestrator", email = "atlas@oh-my-claudecode.local" },
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.9.0",
+    "opentelemetry-distro[otlp]>=0.48b0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+    "opentelemetry-exporter-prometheus>=0.48b0",
+    "prometheus-client>=0.21.0",
+    "typer>=0.12.0",
+    "PyYAML>=6.0.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "respx>=0.22.0",
+    "ruff>=0.7.0",
+    "ty>=0.0.57",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/main.py" = ["N815", "E501"]  # Alertmanager payload uses camelCase; FastAPI route signatures are wider than 100
+"app/clients.py" = ["E501"]  # Protocol + httpx method signatures are wider than 100
+"app/storage.py" = ["E501"]  # SQLite column lists are wider than 100
+"app/postmortem.py" = ["E501"]  # Markdown templates include long inline links
+"app/timeline.py" = ["E501"]  # Multi-line dataclass defaults stay readable
+"tests/*" = ["E501", "SIM105", "F841"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=app --cov-report=term-missing --cov-fail-under=80"

@@ -1,0 +1,55 @@
+# Default values for the incident-engine chart.
+
+serviceName: incident-engine
+
+image:
+  repository: k3d-observability-registry:5000/incident-engine
+  tag: dev
+  pullPolicy: Always
+
+replicaCount: 1
+
+service:
+  port: 8088
+  targetPort: 8088
+
+probes:
+  liveness:
+    path: /healthz
+  readiness:
+    path: /readyz
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "250m"
+
+env:
+  TEMPO_URL: "http://tempo.observability:3200"
+  LOKI_URL: "http://loki.observability:3100"
+  PROM_URL: "http://prometheus.observability:9090"
+  POSTMORTEM_DIR: "/postmortems"
+  INCIDENT_DB_PATH: "/data/incidents.db"
+  LOOKBACK_MINUTES: "5"
+  RESOLVE_TIMEOUT_MINUTES: "30"
+  # INCIDENT_WEBHOOK_URL is optional; left unset by default.
+
+serviceAccount:
+  create: true
+  name: ""
+
+# -- Persistent volumes for /data (SQLite) and /postmortems (markdown files).
+persistence:
+  enabled: true
+  dataSize: 1Gi
+  postmortemSize: 1Gi
+  storageClassName: ""
+
+# -- ServiceMonitor configuration (Prometheus operator).
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  path: /metrics

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: incident-engine
+description: Alertmanager webhook receiver that emits Markdown postmortems
+version: 0.1.0
+appVersion: "0.1.0"
+type: application

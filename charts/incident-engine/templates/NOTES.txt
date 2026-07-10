@@ -1,0 +1,26 @@
+incident-engine has been installed.
+
+Get started:
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "incidentengine.fullname" . }} 8088:8088 &
+  curl http://localhost:8088/healthz
+  curl http://localhost:8088/incidents
+
+Send a test Alertmanager webhook:
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "incidentengine.fullname" . }} 8088:8088 &
+  curl -X POST -H 'Content-Type: application/json' http://localhost:8088/webhook \
+    -d @<(cat <<EOF
+  {
+    "version": "4",
+    "status": "firing",
+    "alerts": [{
+      "status": "firing",
+      "labels": {"alertname":"HighErrorRate","service":"cart-service","severity":"critical","slo":"availability"},
+      "annotations": {"summary":"test alert"},
+      "startsAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+      "fingerprint": "test-$(date +%s)"
+    }]
+  }
+EOF
+  )
+
+Postmortems are persisted to PVC {{ include "incidentengine.fullname" . }}-postmortems.
