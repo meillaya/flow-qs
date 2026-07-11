@@ -60,6 +60,31 @@ FAIL=0
 DEFERRED=0
 TOTAL=0
 declare -a RESULTS=()
+declare -A ACTIVE_PORT_FORWARDS=()
+
+track_port_forward() {
+    ACTIVE_PORT_FORWARDS["$1"]=1
+}
+
+stop_port_forwards() {
+    local pid
+    for pid in "$@"; do
+        kill "${pid}" 2>/dev/null || true
+    done
+    for pid in "$@"; do
+        wait "${pid}" 2>/dev/null || true
+        unset 'ACTIVE_PORT_FORWARDS[$pid]'
+    done
+}
+
+cleanup_port_forwards() {
+    local pids=("${!ACTIVE_PORT_FORWARDS[@]}")
+    stop_port_forwards "${pids[@]}"
+}
+
+trap cleanup_port_forwards EXIT
+trap 'cleanup_port_forwards; exit 130' INT
+trap 'cleanup_port_forwards; exit 143' TERM
 
 # --------- Output helpers ----------------------------------------------------
 log()  { printf '%s\n' "$*"; }
@@ -219,10 +244,10 @@ check_4_service_health() {
             port_local=$((port_local % 65536))
             kubectl -n "${ECOM_NS}" port-forward "svc/${svc}" "${port_local}:${port}" >/dev/null 2>&1 &
             pf_pid=$!
+            track_port_forward "${pf_pid}"
             sleep 0.5
             code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port_local}/healthz" 2>/dev/null) || code=000
-            kill "${pf_pid}" 2>/dev/null
-            wait "${pf_pid}" 2>/dev/null
+            stop_port_forwards "${pf_pid}"
             if [[ "${code}" == "200" ]]; then
                 log "  ok   ${svc} (port-forward ${port_local} -> ${port}) -> 200"
                 break
@@ -275,8 +300,10 @@ check_5_otel_trace() {
     tempo_pf=$(pick_local_port)
     kubectl -n "${OBS_NS}" port-forward svc/otel-collector "${otel_pf}:4318" >/dev/null 2>&1 &
     local otel_pid=$!
+    track_port_forward "${otel_pid}"
     kubectl -n "${OBS_NS}" port-forward svc/tempo "${tempo_pf}:3200" >/dev/null 2>&1 &
     local tempo_pid=$!
+    track_port_forward "${tempo_pid}"
     sleep 1
 
     local trace_id
@@ -321,8 +348,7 @@ EOF
         --data-urlencode "limit=10" \
         "http://127.0.0.1:${tempo_pf}/api/search" 2>/dev/null) || qcode=000
 
-    kill "${otel_pid}" "${tempo_pid}" 2>/dev/null
-    wait 2>/dev/null
+    stop_port_forwards "${otel_pid}" "${tempo_pid}"
 
     log "  otlp push http=${push_code} trace_id=${trace_id}"
     log "  tempo /ready=${ready_code} /api/search http=${qcode}"
@@ -347,6 +373,7 @@ check_6_loki_logs() {
     loki_pf=$(pick_local_port)
     kubectl -n "${OBS_NS}" port-forward svc/loki "${loki_pf}:3100" >/dev/null 2>&1 &
     local pid=$!
+    track_port_forward "${pid}"
     sleep 1
 
     local now_ns=$(( $(date +%s) * 1000000000 ))
@@ -363,20 +390,34 @@ EOF
         "http://127.0.0.1:${loki_pf}/loki/api/v1/push" 2>/dev/null) || pcode=000
 
     sleep 1
-    local qcode
+    local ready_code qcode qbody api_status result_count
+    ready_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:${loki_pf}/ready" 2>/dev/null) || ready_code=000
+    qbody=$(curl -sS -m 5 -G \
+        --data-urlencode "query={job=\"${stream_tag}\"}" \
+        "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || qbody=''
     qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
         --data-urlencode "query={job=\"${stream_tag}\"}" \
-        "http://127.0.0.1:${loki_pf}/loki/api/v1/query" 2>/dev/null) || qcode=000
+        "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || qcode=000
 
-    kill "${pid}" 2>/dev/null
-    wait 2>/dev/null
+    read -r api_status result_count < <(
+        printf '%s' "${qbody}" \
+            | jq -er '[.status, (if (.data.result | type) == "array" then (.data.result | length) else error("result is not an array") end)] | @tsv' 2>/dev/null \
+            || printf 'invalid\t0\n'
+    )
 
-    log "  loki /ready_code_probe=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${loki_pf}/ready" 2>/dev/null)"
-    log "  push http=${pcode}  query http=${qcode}"
-    if [[ "${pcode}" =~ ^2[0-9][0-9]$ && "${qcode}" =~ ^2[0-9][0-9]$ ]]; then
+    stop_port_forwards "${pid}"
+
+    log "  loki /ready=${ready_code}"
+    log "  push http=${pcode}  query_range http=${qcode} status=${api_status} results=${result_count}"
+    if [[ "${pcode}" =~ ^2[0-9][0-9]$ \
+        && "${qcode}" =~ ^2[0-9][0-9]$ \
+        && "${api_status}" == "success" \
+        && "${result_count}" =~ ^[0-9]+$ \
+        && "${result_count}" -gt 0 ]]; then
         record PASS "6.loki-logs"
     else
-        record FAIL "6.loki-logs" "push=${pcode} query=${qcode}"
+        record FAIL "6.loki-logs" "push=${pcode} query=${qcode} status=${api_status} results=${result_count}"
     fi
 }
 
@@ -394,16 +435,17 @@ check_7_prom_metric() {
     fi
 
     local prom_svc="prometheus"
-    local prom_port=9090
-    kubectl -n "${OBS_NS}" get svc prometheus-operated >/dev/null 2>&1 && {
+    local prom_port=80
+    if ! kubectl -n "${OBS_NS}" get svc prometheus >/dev/null 2>&1; then
         prom_svc="prometheus-operated"
         prom_port=9090
-    }
+    fi
 
     local prom_pf
     prom_pf=$(pick_local_port)
     kubectl -n "${OBS_NS}" port-forward "svc/${prom_svc}" "${prom_pf}:${prom_port}" >/dev/null 2>&1 &
     local pid=$!
+    track_port_forward "${pid}"
     sleep 1
 
     local ready_code qcode qbody
@@ -413,18 +455,25 @@ check_7_prom_metric() {
     qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G --data-urlencode 'query=up' \
         "http://127.0.0.1:${prom_pf}/api/v1/query" 2>/dev/null) || qcode=000
 
-    kill "${pid}" 2>/dev/null
-    wait 2>/dev/null
+    stop_port_forwards "${pid}"
 
-    local result_count
-    result_count=$(printf '%s' "${qbody}" | jq -r '.data.result | length' 2>/dev/null || echo 0)
+    local api_status result_count
+    read -r api_status result_count < <(
+        printf '%s' "${qbody}" \
+            | jq -er '[.status, (if (.data.result | type) == "array" then (.data.result | length) else error("result is not an array") end)] | @tsv' 2>/dev/null \
+            || printf 'invalid\t0\n'
+    )
 
     log "  prom service: ${prom_svc}:${prom_port}"
-    log "  /-/ready=${ready_code}  /api/v1/query?query=up http=${qcode}  result_count=${result_count}"
-    if [[ "${qcode}" =~ ^2[0-9][0-9]$ && "${result_count}" -gt 0 ]]; then
+    log "  /-/ready=${ready_code}  /api/v1/query?query=up http=${qcode}  status=${api_status} result_count=${result_count}"
+    if [[ "${ready_code}" =~ ^2[0-9][0-9]$ \
+        && "${qcode}" =~ ^2[0-9][0-9]$ \
+        && "${api_status}" == "success" \
+        && "${result_count}" =~ ^[0-9]+$ \
+        && "${result_count}" -gt 0 ]]; then
         record PASS "7.prom-metric"
     else
-        record FAIL "7.prom-metric" "ready=${ready_code} query=${qcode} results=${result_count}"
+        record FAIL "7.prom-metric" "ready=${ready_code} query=${qcode} status=${api_status} results=${result_count}"
     fi
 }
 
@@ -441,6 +490,7 @@ check_8_grafana_ds() {
     graf_pf=$(pick_local_port)
     kubectl -n "${OBS_NS}" port-forward svc/grafana "${graf_pf}:80" >/dev/null 2>&1 &
     local pid=$!
+    track_port_forward "${pid}"
     sleep 1
 
     local code body ds_count
@@ -449,8 +499,7 @@ check_8_grafana_ds() {
     body=$(cat /tmp/verify_grafana_ds.json 2>/dev/null || echo "")
     ds_count=$(printf '%s' "${body}" | jq 'length' 2>/dev/null || echo 0)
 
-    kill "${pid}" 2>/dev/null
-    wait 2>/dev/null
+    stop_port_forwards "${pid}"
 
     log "  /api/datasources http=${code}  count=${ds_count}"
     if [[ "${code}" =~ ^2[0-9][0-9]$ && "${ds_count}" -ge 1 ]]; then
@@ -461,10 +510,9 @@ check_8_grafana_ds() {
 }
 
 # =============================================================================
-# CHECK 9 — Grafana dashboard svc-overview returns 200
 # =============================================================================
 check_9_grafana_dashboard() {
-    hdr "Check 9: Grafana dashboard svc-overview"
+    hdr "Check 9: Grafana dashboard service-overview"
     if ! kubectl -n "${OBS_NS}" get svc grafana >/dev/null 2>&1; then
         record DEFERRED-PENDING-DEPLOY "9.grafana-dashboard" "grafana service not present"
         return
@@ -473,20 +521,22 @@ check_9_grafana_dashboard() {
     graf_pf=$(pick_local_port)
     kubectl -n "${OBS_NS}" port-forward svc/grafana "${graf_pf}:80" >/dev/null 2>&1 &
     local pid=$!
+    track_port_forward "${pid}"
     sleep 1
 
-    local code
-    code=$(curl -sS -m 5 -u admin:admin -o /dev/null -w '%{http_code}' \
-        "http://127.0.0.1:${graf_pf}/api/dashboards/uid/svc-overview" 2>/dev/null) || code=000
+    local code body dashboard_uid
+    code=$(curl -sS -m 5 -u admin:admin -o /tmp/verify_grafana_dashboard.json -w '%{http_code}' \
+        "http://127.0.0.1:${graf_pf}/api/dashboards/uid/service-overview" 2>/dev/null) || code=000
+    body=$(cat /tmp/verify_grafana_dashboard.json 2>/dev/null || echo "")
+    dashboard_uid=$(printf '%s' "${body}" | jq -er '.dashboard.uid | select(type == "string")' 2>/dev/null || printf 'invalid')
 
-    kill "${pid}" 2>/dev/null
-    wait 2>/dev/null
+    stop_port_forwards "${pid}"
 
-    log "  /api/dashboards/uid/svc-overview http=${code}"
-    if [[ "${code}" == "200" ]]; then
+    log "  /api/dashboards/uid/service-overview http=${code} uid=${dashboard_uid}"
+    if [[ "${code}" == "200" && "${dashboard_uid}" == "service-overview" ]]; then
         record PASS "9.grafana-dashboard"
     else
-        record FAIL "9.grafana-dashboard" "http=${code} (dashboard may not be provisioned yet)"
+        record FAIL "9.grafana-dashboard" "http=${code} uid=${dashboard_uid} (dashboard may not be provisioned yet)"
     fi
 }
 
@@ -496,36 +546,59 @@ check_9_grafana_dashboard() {
 check_10_prom_rules() {
     hdr "Check 10: Prometheus rules / alert rules loaded"
     local prom_svc="prometheus"
-    kubectl -n "${OBS_NS}" get svc prometheus-operated >/dev/null 2>&1 && prom_svc="prometheus-operated"
+    local prom_port=80
+    if ! kubectl -n "${OBS_NS}" get svc prometheus >/dev/null 2>&1; then
+        prom_svc="prometheus-operated"
+        prom_port=9090
+    fi
     if ! kubectl -n "${OBS_NS}" get svc "${prom_svc}" >/dev/null 2>&1; then
         record DEFERRED-PENDING-DEPLOY "10.prom-rules" "prometheus service not present"
         return
     fi
     local pf
     pf=$(pick_local_port)
-    kubectl -n "${OBS_NS}" port-forward "svc/${prom_svc}" "${pf}:9090" >/dev/null 2>&1 &
+    kubectl -n "${OBS_NS}" port-forward "svc/${prom_svc}" "${pf}:${prom_port}" >/dev/null 2>&1 &
     local pid=$!
+    track_port_forward "${pid}"
     sleep 1
 
-    local code body alert_count group_count
+    local code body api_status group_count rule_count recording_count alert_count
     code=$(curl -sS -m 5 -o /tmp/verify_rules.json -w '%{http_code}' \
         "http://127.0.0.1:${pf}/api/v1/rules" 2>/dev/null) || code=000
     body=$(cat /tmp/verify_rules.json 2>/dev/null || echo "")
-    group_count=$(printf '%s' "${body}" | jq -r '.data.groups | length' 2>/dev/null || echo 0)
-    # Total number of alert rules across all groups
-    alert_count=$(printf '%s' "${body}" | jq -r '[.data.groups[].rules[] | select(.type == "alerting")] | length' 2>/dev/null || echo 0)
+    read -r api_status group_count rule_count recording_count alert_count < <(
+        printf '%s' "${body}" | jq -er '
+            if (.data.groups | type) != "array" then error("groups is not an array") else
+                [
+                    .status,
+                    (.data.groups | length),
+                    ([.data.groups[].rules[]] | length),
+                    ([.data.groups[].rules[] | select(.type == "recording")] | length),
+                    ([.data.groups[].rules[] | select(.type == "alerting")] | length)
+                ] | @tsv
+            end
+        ' 2>/dev/null || printf 'invalid\t0\t0\t0\t0\n'
+    )
 
-    kill "${pid}" 2>/dev/null
-    wait 2>/dev/null
+    stop_port_forwards "${pid}"
 
-    log "  /api/v1/rules http=${code}  groups=${group_count}  alerts=${alert_count}"
+    log "  prom service: ${prom_svc}:${prom_port}"
+    log "  /api/v1/rules http=${code}  status=${api_status}  groups=${group_count}  rules=${rule_count}  recordings=${recording_count}  alerts=${alert_count}"
     # The plan calls for 5 alert rules; the in-repo alert_rules.yaml actually
     # defines 7 distinct alert kinds applied per-service (49 total for 7
     # services). Treat >=5 unique alerting rules across all groups as PASS.
-    if [[ "${code}" =~ ^2[0-9][0-9]$ && "${alert_count}" -ge 5 ]]; then
+    if [[ "${code}" =~ ^2[0-9][0-9]$ \
+        && "${api_status}" == "success" \
+        && "${group_count}" =~ ^[0-9]+$ \
+        && "${group_count}" -gt 0 \
+        && "${rule_count}" =~ ^[0-9]+$ \
+        && "${recording_count}" =~ ^[0-9]+$ \
+        && "${recording_count}" -gt 0 \
+        && "${alert_count}" =~ ^[0-9]+$ \
+        && "${alert_count}" -ge 5 ]]; then
         record PASS "10.prom-rules"
     else
-        record FAIL "10.prom-rules" "http=${code} groups=${group_count} alerts=${alert_count}"
+        record FAIL "10.prom-rules" "http=${code} status=${api_status} groups=${group_count} rules=${rule_count} recordings=${recording_count} alerts=${alert_count}"
     fi
 }
 
@@ -548,6 +621,7 @@ check_11_incident_engine() {
     pf=$(pick_local_port)
     kubectl -n "${INCIDENT_NS}" port-forward "svc/${svc_name}" "${pf}:8088" >/dev/null 2>&1 &
     local pid=$!
+    track_port_forward "${pid}"
     sleep 1
 
     local code body arr_len
@@ -556,8 +630,7 @@ check_11_incident_engine() {
     body=$(cat /tmp/verify_inc.json 2>/dev/null || echo "")
     arr_len=$(printf '%s' "${body}" | jq 'if type == "array" then length else -1 end' 2>/dev/null || echo -1)
 
-    kill "${pid}" 2>/dev/null
-    wait 2>/dev/null
+    stop_port_forwards "${pid}"
 
     log "  svc=${svc_name}  /incidents http=${code}  json_type=$(printf '%s' "${body}" | jq -r 'type' 2>/dev/null)"
     if [[ "${code}" =~ ^2[0-9][0-9]$ && "${arr_len}" -ge 0 ]]; then
@@ -610,8 +683,10 @@ main() {
     log "Evidence:  ${evidence_file}"
 
     if [[ "${FAIL}" -gt 0 ]]; then
+        cleanup_port_forwards
         exit 1
     fi
+    cleanup_port_forwards
     exit 0
 }
 

@@ -15,6 +15,7 @@ variable "SERVICES" {
     "cart-service",
     "catalog-service",
     "checkout-service",
+    "incident-engine",
     "inventory-service",
     "order-service",
     "payment-gateway",
@@ -54,6 +55,15 @@ target "checkout-service" {
   tags = ["${REGISTRY}/${REPOSITORY}/checkout-service:${SHA}"]
   cache-from = ["type=gha,scope=checkout-service"]
   cache-to = ["type=gha,mode=max,scope=checkout-service"]
+}
+
+target "incident-engine" {
+  inherits = ["docker-metadata-action"]
+  context = "./services/incident-engine"
+  dockerfile = "Dockerfile"
+  tags = ["${REGISTRY}/${REPOSITORY}/incident-engine:${SHA}"]
+  cache-from = ["type=gha,scope=incident-engine"]
+  cache-to = ["type=gha,mode=max,scope=incident-engine"]
 }
 
 target "inventory-service" {

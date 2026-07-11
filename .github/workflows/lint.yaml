@@ -9,6 +9,21 @@ name: Lint
       - main
 
 jobs:
+  ci-structure:
+    name: CI Structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify service and infrastructure coverage
+        run: |
+          python3 .github/workflows/test_verify_ci_structure.py
+          python3 .github/workflows/verify_ci_structure.py
+
   python-lint:
     name: Python Lint (${{ matrix.service }})
     runs-on: ubuntu-latest
@@ -19,6 +34,7 @@ jobs:
           - cart-service
           - catalog-service
           - checkout-service
+          - incident-engine
           - inventory-service
           - order-service
           - synthetic-monitor

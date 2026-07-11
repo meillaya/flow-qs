@@ -19,6 +19,7 @@ jobs:
           - cart-service
           - catalog-service
           - checkout-service
+          - incident-engine
           - inventory-service
           - order-service
           - synthetic-monitor

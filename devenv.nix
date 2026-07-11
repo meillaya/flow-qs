@@ -30,6 +30,9 @@
     k6
     grpcurl
     kustomize
+    prometheus
+    prometheus-alertmanager
+    shellcheck
   ];
 
   env = {
