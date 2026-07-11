@@ -44,16 +44,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run pytest with coverage
-        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: coverage-${{ matrix.service }}
-          path: services/${{ matrix.service }}/coverage.xml
-          retention-days: 7
+      - name: Run pytest
+        run: uv run --frozen pytest
 
   go-test:
     name: Go Tests (payment-gateway)

@@ -41,6 +41,48 @@ def workflow_services(path: Path) -> set[str]:
     return services
 
 
+def step_command(lines: list[str], step_name: str) -> str | None:
+    step_marker = f"      - name: {step_name}"
+    step_start = next(
+        (index for index, line in enumerate(lines) if line == step_marker),
+        None,
+    )
+    if step_start is None:
+        return None
+    for line in lines[step_start + 1 :]:
+        if line.startswith("      - name: "):
+            break
+        if line.startswith("        run: "):
+            return line.removeprefix("        run: ")
+    return None
+
+
+def workflow_step_command(path: Path, step_name: str) -> str | None:
+    return step_command(path.read_text(encoding="utf-8").splitlines(), step_name)
+
+
+def workflow_job_lines(path: Path, job_name: str) -> list[str]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    job_marker = f"  {job_name}:"
+    job_start = next(
+        (index for index, line in enumerate(lines) if line == job_marker),
+        None,
+    )
+    if job_start is None:
+        return []
+    job_end = next(
+        (
+            index
+            for index, line in enumerate(lines[job_start + 1 :], job_start + 1)
+            if line.startswith("  ")
+            and not line.startswith("    ")
+            and line.endswith(":")
+        ),
+        len(lines),
+    )
+    return lines[job_start:job_end]
+
+
 def bake_services() -> tuple[set[str], set[str]]:
     rendered = subprocess.run(
         ["docker", "buildx", "bake", "-f", "docker-bake.hcl", "--print"],
@@ -132,6 +174,25 @@ def infra_guardrail_failures() -> list[str]:
     return []
 
 
+def helm_lint_failures() -> list[str]:
+    lint_workflow = REPO_ROOT / ".github" / "workflows" / "lint.yaml"
+    command = workflow_step_command(lint_workflow, "Lint Helm charts")
+    if command != "make lint-chart":
+        return ["Helm lint workflow must run canonical make lint-chart"]
+    return []
+
+
+def python_test_failures() -> list[str]:
+    test_workflow = REPO_ROOT / ".github" / "workflows" / "test.yaml"
+    python_job = workflow_job_lines(test_workflow, "python-test")
+    failures = []
+    if step_command(python_job, "Run pytest") != "uv run --frozen pytest":
+        failures.append("Python test matrix must run uv run --frozen pytest")
+    if any("uses: actions/upload-artifact" in line for line in python_job):
+        failures.append("Python test matrix must not upload generic coverage artifacts")
+    return failures
+
+
 def main() -> int:
     failures = []
     for workflow_name, expected in (
@@ -146,6 +207,8 @@ def main() -> int:
     failures.extend(require_exact("Bake default group", default_targets, IMAGE_SERVICES))
     failures.extend(require_exact("Bake targets", declared_targets, IMAGE_SERVICES))
     failures.extend(infra_guardrail_failures())
+    failures.extend(helm_lint_failures())
+    failures.extend(python_test_failures())
 
     if failures:
         print("service coverage verification failed:", file=sys.stderr)
@@ -155,7 +218,8 @@ def main() -> int:
 
     print(
         "CI structure verified: lint/test=7 Python services; "
-        "build/Bake=8 images; Traefik disabled"
+        "build/Bake=8 images; Traefik disabled; Helm lint canonical; "
+        "Python tests frozen"
     )
     return 0
 

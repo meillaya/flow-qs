@@ -20,6 +20,21 @@ case " $* " in
         printf '%s\n' "$$" >>"${MOCK_KUBECTL_PID_LOG}"
         while :; do sleep 60; done
         ;;
+    *" get pods -A --no-headers "*)
+        printf '%s\n' \
+            'observability otel-collector-a 1/1 Running 0 1m' \
+            'observability otel-collector-b 1/1 Running 0 1m'
+        ;;
+    *" get deployment otel-collector "*)
+        case "${MOCK_COLLECTOR_STATE:-valid}" in
+            valid) printf '%s\n' '{"spec":{"replicas":2},"status":{"readyReplicas":2}}' ;;
+            one_of_two) printf '%s\n' '{"spec":{"replicas":2},"status":{"readyReplicas":1}}' ;;
+            two_of_three) printf '%s\n' '{"spec":{"replicas":3},"status":{"readyReplicas":2}}' ;;
+            malformed) printf '%s\n' '{"spec":{"replicas":"2"},"status":{"readyReplicas":null}}' ;;
+            empty) : ;;
+        esac
+        ;;
+    *" get svc ${MOCK_MISSING_SERVICE:-__none__} "*) exit 1 ;;
     *" get svc prometheus-operated "*) exit 1 ;;
     *" get svc prometheus "*|*" get svc loki "*|*" get svc grafana "*|*" get svc otel-collector "*|*" get svc tempo "*) exit 0 ;;
     *) exit 1 ;;
@@ -163,6 +178,7 @@ assert_status() {
 
 run_check() {
     local check="$1" invalid_rules="${2:-0}" mock_failure="${3:-}" grafana_body="${4:-}"
+    local collector_state="${5:-valid}" missing_service="${6:-}"
     : >"${TMP_DIR}/kubectl-${check}.log"
     : >"${TMP_DIR}/kubectl-${check}.pids"
     : >"${TMP_DIR}/curl-${check}.log"
@@ -176,6 +192,8 @@ run_check() {
         MOCK_RULES_INVALID="${invalid_rules}" \
         MOCK_FAILURE="${mock_failure}" \
         MOCK_GRAFANA_BODY="${grafana_body}" \
+        MOCK_COLLECTOR_STATE="${collector_state}" \
+        MOCK_MISSING_SERVICE="${missing_service}" \
         bash "${VERIFY}" "${check}" >"${TMP_DIR}/check-${check}-${invalid_rules}.out" 2>&1
     RUN_STATUS=$?
     set -e
@@ -259,6 +277,17 @@ PY
         printf 'PASS: %s round %s reaps all %s port-forward child(ren)\n' "${signal}" "${round}" "${child_count}"
     fi
 }
+
+run_check 3
+assert_status "${RUN_STATUS}" 0 "Collector readiness accepts exactly 2/2 desired and ready replicas"
+
+for collector_state in one_of_two two_of_three malformed empty; do
+    run_check 3 0 '' '' "${collector_state}"
+    assert_status "${RUN_STATUS}" 1 "Collector readiness fails closed for ${collector_state}"
+done
+
+run_check 6 0 '' '' valid loki
+assert_status "${RUN_STATUS}" 1 "A deferred selected check makes the verifier exit nonzero"
 
 run_check 6
 assert_status "${RUN_STATUS}" 0 "Loki push/range-query check passes"

@@ -162,19 +162,37 @@ check_2_namespaces() {
 
 check_3_pods_ready() {
     hdr "Check 3: pods Ready"
-    local out
+    local out collector_out
     if ! out="$(kubectl get pods -A --no-headers 2>&1)"; then
         record FAIL "3.pods-ready" "kubectl error: ${out}"
+        return
+    fi
+    if ! collector_out="$(kubectl -n "${OBS_NS}" get deployment otel-collector -o json 2>&1)"; then
+        record FAIL "3.pods-ready" "collector deployment query error: ${collector_out}"
         return
     fi
     local total ready
     total=$(printf '%s\n' "${out}" | grep -vc 'NAMESPACE' || true)
     ready=$(printf '%s\n' "${out}" | awk '$4 ~ /^Running/' | grep -cE '([0-9]+)\/(\1)' || true)
-    log "  pods=${ready}/${total} Ready+Running"
+    local collector_desired="invalid" collector_ready="invalid"
+    read -r collector_desired collector_ready < <(
+        printf '%s' "${collector_out}" | jq -er '
+            if (.spec.replicas | type) == "number"
+                and (.status.readyReplicas | type) == "number"
+                and .spec.replicas == (.spec.replicas | floor)
+                and .status.readyReplicas == (.status.readyReplicas | floor)
+            then [.spec.replicas, .status.readyReplicas] | @tsv
+            else error("collector replica counts must be integers")
+            end
+        ' 2>/dev/null || printf 'invalid\tinvalid\n'
+    )
+    log "  pods=${ready}/${total} Ready+Running  otel-collector=${collector_ready}/${collector_desired} Ready"
     if [[ "${total}" -eq 0 ]]; then
         record FAIL "3.pods-ready" "no pods visible"
     elif [[ "${ready}" -eq 0 ]]; then
         record FAIL "3.pods-ready" "no pods in Ready+Running state"
+    elif [[ "${collector_desired}" != "2" || "${collector_ready}" != "2" ]]; then
+        record FAIL "3.pods-ready" "otel-collector expected ready/desired=2/2, got ${collector_ready}/${collector_desired}"
     else
         record PASS "3.pods-ready"
     fi
@@ -608,7 +626,7 @@ main() {
     } > "${evidence_file}"
     log "Evidence:  ${evidence_file}"
 
-    if [[ "${FAIL}" -gt 0 ]]; then
+    if [[ "${FAIL}" -gt 0 || "${DEFERRED}" -gt 0 ]]; then
         cleanup_port_forwards
         exit 1
     fi
