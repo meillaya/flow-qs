@@ -39,13 +39,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare lowercase image tag
+        id: image
+        shell: bash
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          tag="ghcr.io/$repository/$SERVICE:$GITHUB_SHA"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: ./services/${{ matrix.service }}
           file: ./services/${{ matrix.service }}/Dockerfile
           push: true
-          tags: "ghcr.io/${{ github.repository }}/${{ matrix.service }}:\
-            ${{ github.sha }}"
+          tags: ${{ steps.image.outputs.tag }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}

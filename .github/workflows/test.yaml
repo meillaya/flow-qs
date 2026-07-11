@@ -41,6 +41,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Go for gateway interoperability tests
+        if: >-
+          ${{ matrix.service == 'checkout-service' ||
+              matrix.service == 'order-service' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/payment-gateway/go.mod
+          cache-dependency-path: services/payment-gateway/go.sum
+
+      - name: Warm payment gateway build cache
+        if: >-
+          ${{ matrix.service == 'checkout-service' ||
+              matrix.service == 'order-service' }}
+        working-directory: services/payment-gateway
+        run: go build ./...
+
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
