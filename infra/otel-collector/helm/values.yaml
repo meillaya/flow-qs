@@ -23,7 +23,6 @@ serviceAccount:
   name: otel-collector
   annotations: {}
 
-# Resources — spec: requests 256Mi/256m, limits 512Mi/500m.
 # The memory limit must be < memory_limiter.limit_mib (1024) so the limiter
 # has headroom; with limit=512Mi the spike_limit=512Mi is a sane safe upper.
 resources:
@@ -34,9 +33,8 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# Service — ClusterIP exposes OTLP gRPC/HTTP and the health-check / pprof
-# ports. The OTLP receivers are NOT exposed externally; only in-cluster
-# services and the local observability stack talk to them.
+# OTLP receivers are intentionally limited to in-cluster services and the local
+# observability stack.
 service:
   type: ClusterIP
   ports:

@@ -1,34 +1,11 @@
 #!/usr/bin/env bash
-# =============================================================================
-# scripts/verify.sh
-#
-# End-to-end health check for the Enten v2 observability platform.
-#
-# Runs 11 mandatory checks against the cluster identified by $KUBECONFIG
-# (defaults to ~/.kube/config-observability) and reports PASS / FAIL /
-# DEFERRED-PENDING-DEPLOY for each. The script NEVER auto-fixes failures —
-# it only reports. Some checks may be DEFERRED if a component has only
-# been provisioned in source-of-truth (Helm values, ConfigMaps) but not
-# yet `helm install`-ed onto the cluster; that is expected during Wave 1.
-#
-# Usage:
-#   bash scripts/verify.sh           # all 11 checks
-#   bash scripts/verify.sh 2 5 7     # only checks 2, 5, 7
-#
-# Exit codes:
-#   0  all selected checks PASS (FAILs not selected, only DEFERREDs acceptable)
-#   1  at least one selected check FAILed
-#   2  invocation error (bad arguments, missing prerequisites)
-# =============================================================================
 
-# --------- Strict-mode setup -------------------------------------------------
 # We INTENTIONALLY do not use `set -e`: each of the 11 checks must complete
 # even when earlier checks fail. We still want:
 #   -u  : undefined variable is an error
 #   -o pipefail : a failed command in a pipeline propagates
 set -uo pipefail
 
-# --------- Configuration -----------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 EVIDENCE_DIR="${REPO_ROOT}/.omo/evidence"
@@ -41,7 +18,6 @@ OBS_NS="observability"
 ECOM_NS="ecom"
 INCIDENT_NS="incident"
 
-# Services expected in ecom. Each entry is "release_name svc_port".
 # Note: checkout-service chart's _helpers.tpl derives the service name as
 # `<Release.Name>-<serviceName>` (the chart overrides fullname), so the
 # Service object is named `checkout-service-checkout-service`.
@@ -54,7 +30,6 @@ SERVICES=(
     "checkout-service-checkout-service 8003"
 )
 
-# Counters
 PASS=0
 FAIL=0
 DEFERRED=0
@@ -86,12 +61,9 @@ trap cleanup_port_forwards EXIT
 trap 'cleanup_port_forwards; exit 130' INT
 trap 'cleanup_port_forwards; exit 143' TERM
 
-# --------- Output helpers ----------------------------------------------------
 log()  { printf '%s\n' "$*"; }
 hdr()  { printf '\n\033[1;34m=== %s ===\033[0m\n' "$*"; }
 
-# record <status> <name> <detail>
-#   status : PASS | FAIL | DEFERRED-PENDING-DEPLOY
 record() {
     local status="$1"
     local name="$2"
@@ -109,7 +81,6 @@ record() {
     esac
 }
 
-# --------- CLI argument parsing ---------------------------------------------
 SELECTED=""
 if [[ $# -gt 0 ]]; then
     SELECTED="$*"
@@ -123,7 +94,6 @@ selected_check() {
     return 1
 }
 
-# --------- Prerequisite checks (not counted among the 11) -------------------
 prerequisites() {
     hdr "Prerequisites"
     local ok=1
@@ -150,9 +120,6 @@ prerequisites() {
     fi
 }
 
-# =============================================================================
-# CHECK 1 — cluster nodes (3 nodes Ready)
-# =============================================================================
 check_1_cluster_nodes() {
     hdr "Check 1: cluster nodes"
     local out
@@ -174,9 +141,6 @@ check_1_cluster_nodes() {
     fi
 }
 
-# =============================================================================
-# CHECK 2 — namespaces present (5)
-# =============================================================================
 check_2_namespaces() {
     hdr "Check 2: namespaces"
     local want=(observability ecom chaos-testing load incident)
@@ -196,9 +160,6 @@ check_2_namespaces() {
     fi
 }
 
-# =============================================================================
-# CHECK 3 — pods Ready
-# =============================================================================
 check_3_pods_ready() {
     hdr "Check 3: pods Ready"
     local out
@@ -219,9 +180,6 @@ check_3_pods_ready() {
     fi
 }
 
-# =============================================================================
-# CHECK 4 — services /healthz
-# =============================================================================
 check_4_service_health() {
     hdr "Check 4: service /healthz (6 services in ecom)"
     local failed=()
@@ -238,7 +196,6 @@ check_4_service_health() {
                 continue
             fi
         fi
-        # Fallback: kubectl port-forward then curl
         local pf_pid='' port_local=0
         for port_local in "${port}" 9"${port}" 8"${port}"; do
             port_local=$((port_local % 65536))
@@ -265,10 +222,6 @@ check_4_service_health() {
     fi
 }
 
-# =============================================================================
-# Helper: pick a port to forward to for a remote Service
-# ============
-# Returns a free local port on stdout.
 pick_local_port() {
     # Use a high random port in the ephemeral range to avoid collisions.
     while :; do
@@ -280,12 +233,8 @@ pick_local_port() {
     done
 }
 
-# =============================================================================
-# CHECK 5 — OTLP trace push → query Tempo
-# =============================================================================
 check_5_otel_trace() {
     hdr "Check 5: OTLP trace -> Tempo"
-    # Discovery
     if ! kubectl -n "${OBS_NS}" get svc otel-collector >/dev/null 2>&1; then
         record DEFERRED-PENDING-DEPLOY "5.otel-trace" "otel-collector service not present"
         return
@@ -294,7 +243,6 @@ check_5_otel_trace() {
         record DEFERRED-PENDING-DEPLOY "5.otel-trace" "tempo service not present"
         return
     fi
-    # Push via port-forwarded OTLP HTTP
     local otel_pf tempo_pf
     otel_pf=$(pick_local_port)
     tempo_pf=$(pick_local_port)
@@ -334,7 +282,6 @@ EOF
         -d "${payload}" \
         "http://127.0.0.1:${otel_pf}/v1/traces" 2>/dev/null) || push_code=000
 
-    # Tempo search
     local ready_code
     ready_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${tempo_pf}/ready" 2>/dev/null) || ready_code=000
     sleep 1
@@ -360,9 +307,6 @@ EOF
     fi
 }
 
-# =============================================================================
-# CHECK 6 — Loki OTLP-style log push + query
-# =============================================================================
 check_6_loki_logs() {
     hdr "Check 6: Loki log push + query"
     if ! kubectl -n "${OBS_NS}" get svc loki >/dev/null 2>&1; then
@@ -421,9 +365,6 @@ EOF
     fi
 }
 
-# =============================================================================
-# CHECK 7 — Prom query for `up` metric
-# =============================================================================
 check_7_prom_metric() {
     hdr 'Check 7: Prometheus query "up"'
     if ! kubectl -n "${OBS_NS}" get svc prometheus >/dev/null 2>&1; then
@@ -477,9 +418,6 @@ check_7_prom_metric() {
     fi
 }
 
-# =============================================================================
-# CHECK 8 — Grafana datasources list (4 expected)
-# =============================================================================
 check_8_grafana_ds() {
     hdr "Check 8: Grafana datasources"
     if ! kubectl -n "${OBS_NS}" get svc grafana >/dev/null 2>&1; then
@@ -509,8 +447,6 @@ check_8_grafana_ds() {
     fi
 }
 
-# =============================================================================
-# =============================================================================
 check_9_grafana_dashboard() {
     hdr "Check 9: Grafana dashboard service-overview"
     if ! kubectl -n "${OBS_NS}" get svc grafana >/dev/null 2>&1; then
@@ -540,9 +476,6 @@ check_9_grafana_dashboard() {
     fi
 }
 
-# =============================================================================
-# CHECK 10 — Prom rules loaded
-# =============================================================================
 check_10_prom_rules() {
     hdr "Check 10: Prometheus rules / alert rules loaded"
     local prom_svc="prometheus"
@@ -602,9 +535,6 @@ check_10_prom_rules() {
     fi
 }
 
-# =============================================================================
-# CHECK 11 — incident-engine /incidents returns array
-# =============================================================================
 check_11_incident_engine() {
     hdr "Check 11: incident-engine /incidents"
     local svc_name=""
@@ -640,9 +570,6 @@ check_11_incident_engine() {
     fi
 }
 
-# =============================================================================
-# Main
-# =============================================================================
 main() {
     hdr "verify.sh — Enten v2 end-to-end health check"
     log "KUBECONFIG = ${KUBECONFIG}"
@@ -669,7 +596,6 @@ main() {
     log ""
     log "Total: ${TOTAL}    PASS: ${PASS}    FAIL: ${FAIL}    DEFERRED: ${DEFERRED}"
 
-    # Evidence dump
     local evidence_file="${EVIDENCE_DIR}/task-23-verify-summary.txt"
     {
         echo "Enten v2 verify.sh -- $(date -u +'%Y-%m-%dT%H:%M:%SZ')"

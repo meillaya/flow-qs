@@ -360,7 +360,10 @@ def standard_alerts(slo: dict) -> list[dict]:
     for slo_def in slo["slos"]:
         if slo_def["name"] in {"availability", "success_rate"}:
             total_metric, total_labels = split_spec(slo_def["sli"]["total_spec"])
-            err_selector = merge_labels(total_labels, {"status": '~"5.."', "service_name": f'"{service}"'})
+            err_selector = merge_labels(
+                total_labels,
+                {"status": '~"5.."', "service_name": f'"{service}"'},
+            )
             ok_selector = merge_labels(total_labels, {"service_name": f'"{service}"'})
             expr = (
                 f"(\n"
