@@ -185,8 +185,8 @@ Open http://localhost:3000 and log in with `admin / admin`.
 # Synthetic trace + log + metric from a service
 curl -X POST http://catalog-service.ecom:8000/items
 
-# Check Prometheus has the metric
-curl -G http://prometheus.observability:9090/api/v1/query \
+# Check Prometheus has the metric through its in-cluster Service port
+curl -G http://prometheus.observability:80/api/v1/query \
     --data-urlencode 'query=catalog_service_requests_total'
 
 # Check Tempo has the trace
@@ -196,6 +196,10 @@ curl http://tempo.observability:3200/api/search?limit=20
 curl -G http://loki.observability:3100/loki/api/v1/query \
     --data-urlencode 'query={service_name="catalog-service"}'
 ```
+
+Prometheus listens on container port `9090`, but its Kubernetes Service exposes
+port `80`. Use `http://prometheus.observability:80` from inside the cluster;
+`http://localhost:9090` is the host-side forwarded endpoint shown above.
 
 ## Build and Push Service Images
 

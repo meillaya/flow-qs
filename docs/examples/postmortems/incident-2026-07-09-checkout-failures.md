@@ -27,8 +27,8 @@ flowchart LR
 | Time (UTC) | Event |
 |------------|-------|
 | 14:27:00 | `make demo` applies the `network-delay-payment` Chaos Mesh experiment. |
-| 14:28:03 | Prometheus fires `SLOLatencyP99BurnTooFast` for `payment-gateway`. |
-| 14:28:33 | `SLOAvailabilityDrainingBudget` warning fires for `checkout-service`. |
+| 14:28:03 | Prometheus fires `SLOLatencyBurnTooFast` for `payment-gateway`. |
+| 14:28:33 | The warning-tier `SLOAvailabilityBurnTooFast` fires for `checkout-service`. |
 | 14:29:00 | Alertmanager routes both alerts to the incident engine. |
 | 14:30:15 | Querying Tempo shows `payment-gateway.Charge` calls taking ~500 ms. |
 | 14:32:00 | Operator deletes the chaos experiment. |
@@ -80,6 +80,6 @@ After the experiment was removed, `payment-gateway` returned to normal latency a
 
 ## Appendix
 
-- Alertmanager alert: `http://localhost:9093/#/alerts?filter=alertname%3D%22SLOLatencyP99BurnTooFast%22`
+- Alertmanager alert: `http://localhost:9093/#/alerts?filter=alertname%3D%22SLOLatencyBurnTooFast%22`
 - Grafana dashboard: `http://localhost:3000/d/red-checkout/checkout-red-dashboard`
 - Related incident: none
