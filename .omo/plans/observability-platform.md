@@ -69,6 +69,7 @@ Pre-planning analyst (Metis) timed out before producing findings. Planner applie
 Live failing-first verification established five necessary corrections to the original draft:
 
 - devenv 2.x declares executable scripts in `devenv.nix`; `devenv.yaml` is reserved for inputs/configuration.
+- The development shell uses the Go release from the locked devenv rolling nixpkgs input; the payment module, CI, and container build continue to enforce Go 1.22 compatibility.
 - The Collector's synchronized repository-owned Helm chart is the deployment source of truth; maintaining a second Kustomize deployment path caused configuration drift.
 - Tempo 2.9 rejects `querier.max_query_duration`, so the removed field must not be reintroduced.
 - Loki 3.x schema v13 uses TSDB/tsdb-shipper; boltdb-shipper is a legacy store incompatible with the selected chart contract.
@@ -116,7 +117,7 @@ Ship a runnable, portfolio-grade Kubernetes-deployed observability platform that
 - Synthetic monitor as Python script running in-cluster
 - Terraform under `infra/` provisioning the k3d cluster
 - Helm chart per service under `charts/<service>/`
-- `devenv.nix` + `devenv.yaml` providing Python 3.12, Go 1.22, k6, terraform, kubectl, helm, kustomize, gRPC tools
+- `devenv.nix` + `devenv.yaml` providing Python 3.12, Go from locked rolling nixpkgs, k6, terraform, kubectl, helm, kustomize, gRPC tools
 - GitHub Actions workflows for lint, test, build (under `.github/workflows/`)
 - README.md, ARCHITECTURE.md, RUNBOOK.md under `docs/`
 - ≥1 example postmortem.md under `docs/examples/postmortems/`
@@ -276,15 +277,15 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
 > The /start-work progress counter requires exact format. Deviation = progress shows 0/0.
 > Final Verification Wave labels MUST use `F1.`, `F2.`, etc. — NOT `T-F1.`, `F-1.`, `Final 1:`.
 
-- [x] 1. devenv.sh + Nix flakes for Python 3.12, Go 1.22, k6, kubectl, helm, terraform, gRPC tools
+- [x] 1. devenv.sh + Nix flakes for Python 3.12, Go from locked rolling nixpkgs, k6, kubectl, helm, terraform, gRPC tools
 
   **What to do**:
   - Create `devenv.nix` providing all required tooling with pinned versions
   - Declare scripts `up`, `down`, `clean`, `demo`, `lint`, `test` in `devenv.nix`; `devenv.yaml` remains the supported inputs/config file
   - Configure `languages.python = { enable = true; version = "3.12"; }` with uv-managed deps via `[uv]`
-  - Configure `languages.go = { enable = true; version = "1.22"; }`
+  - Configure `languages.go.enable = true`; use the compatible Go release pinned by the rolling nixpkgs lock
   - Pin: terraform 1.7+, kubectl 1.29+, helm 3.14+, k6 0.50+, grpcurl 1.8+, kustomize 5+
-  - Add scripts that source env vars for `KUBECONFIG=~/.kube/config-observability` and `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4317`
+  - Set `KUBECONFIG` at shell entry to `$HOME/.kube/config-observability`, and declare `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc:4317` in the shell environment
   - Verify `devenv shell -- terraform version` outputs pinned version
 
   **Must NOT do**:
@@ -339,7 +340,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   ```
 
   **Commit**: YES
-  - Message: `feat(infra): devenv.nix with Python 3.12, Go 1.22, k6, terraform, kubectl, helm`
+  - Message: `feat(infra): devenv.nix with Python 3.12, rolling Go, k6, terraform, kubectl, helm`
   - Files: `devenv.nix`, `devenv.yaml`, `Makefile`
   - Pre-commit: `devenv shell -- make lint` (if Makefile target exists)
 
@@ -1333,7 +1334,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - **Can Run In Parallel**: YES
   - **Parallel Group**: Wave 2 (with Tasks 9, 10, 11, 12, 13)
   - **Blocks**: checkout-service E2E test (Task 13 verifies gRPC interop), polyglot trace verification (Task 23)
-  - **Blocked By**: Task 1 (devenv with Go 1.22 must exist)
+  - **Blocked By**: Task 1 (devenv with a compatible Go toolchain must exist)
 
   **References**:
   - OTel Go quickstart: https://opentelemetry.io/docs/languages/go/getting-started/
@@ -2422,7 +2423,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
 Atomic commits per task. Commit message format: `type(scope): description`.
 
 Examples:
-- `feat(infra): devenv.nix with Python 3.12, Go 1.22, k6, terraform, kubectl, helm`
+- `feat(infra): devenv.nix with Python 3.12, rolling Go, k6, terraform, kubectl, helm`
 - `feat(infra): terraform k3d cluster with 6GB server + 4GB agent memory`
 - `feat(services): catalog-service with FastAPI, OTel auto-instrumentation, SQLite`
 - `feat(services): payment-gateway in Go with Chi, OTel, gRPC server`

@@ -1,5 +1,6 @@
 .omo/
 .omo/evidence/
+.devenv/
 **/.venv/
 **/__pycache__/
 **/*.pyc
@@ -9,4 +10,3 @@
 **/.ruff_cache/
 **/*.egg-info/
 **/orders.db
-

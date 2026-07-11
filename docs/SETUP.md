@@ -29,12 +29,16 @@ Verify the tools:
 
 ```bash
 python3 --version   # 3.12
-go version          # 1.22
+go version          # version pinned by devenv.lock
 terraform version   # >= 1.5
 kubectl version     # client 1.29+
 helm version
 k6 version
 ```
+
+The payment gateway continues to target Go 1.22 in `go.mod` and CI, while
+the development shell uses the compatible Go release from the locked rolling
+nixpkgs input.
 
 ## Provision the Cluster and Stack
 

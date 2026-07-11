@@ -18,7 +18,7 @@ A Kubernetes-deployed distributed observability and incident response platform f
 | Dashboards | Grafana | Provisioned RED, SLO, trace, and log dashboards |
 | Chaos | Chaos Mesh | Pod, network, DNS, and CPU fault injection |
 | Load | k6 | Smoke, load, stress, and spike profiles |
-| Dev env | devenv | Reproducible shell with Python 3.12, Go 1.22, k6, terraform, kubectl, helm |
+| Dev env | devenv | Reproducible shell with Python 3.12, Go from locked rolling nixpkgs, k6, terraform, kubectl, helm |
 
 ## Quick Start
 

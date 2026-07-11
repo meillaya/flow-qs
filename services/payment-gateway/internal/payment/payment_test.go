@@ -48,6 +48,8 @@ func TestStore_Refund(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	// Ensure FAILURE_RATE is not leaked between tests.
-	os.Unsetenv("FAILURE_RATE")
+	if err := os.Unsetenv("FAILURE_RATE"); err != nil {
+		panic(err)
+	}
 	os.Exit(m.Run())
 }

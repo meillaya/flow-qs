@@ -2,7 +2,6 @@
 SHELL              := bash
 .SHELLFLAGS        := -eu -o pipefail -c
 export KUBECONFIG  ?= $(HOME)/.kube/config-observability
-export PATH        := $(HOME)/.local/bin:$(HOME)/.nix-profile/bin:$(PATH)
 
 CLUSTER_NAME       := observability-platform
 REGISTRY_NAME      := k3d-observability-registry

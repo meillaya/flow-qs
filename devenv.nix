@@ -1,8 +1,6 @@
 { pkgs, lib, config, inputs, ... }:
 
 {
-  nixpkgs.config.allowUnfree = true;
-
   languages.python = {
     enable = true;
     version = "3.12";
@@ -13,7 +11,6 @@
 
   languages.go = {
     enable = true;
-    version = "1.22";
   };
 
   packages = with pkgs; [
@@ -36,7 +33,7 @@
   ];
 
   env = {
-    KUBECONFIG = "$HOME/.kube/config-observability";
+    LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
     OTEL_EXPORTER_OTLP_ENDPOINT = "http://otel-collector.observability.svc:4317";
     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://otel-collector.observability.svc:4317";
     OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = "http://otel-collector.observability.svc:4317";
@@ -53,6 +50,7 @@
   };
 
   enterShell = ''
+    export KUBECONFIG="$HOME/.kube/config-observability"
     echo "Observability Platform dev shell ready"
     echo "KUBECONFIG: $KUBECONFIG"
     echo "OTEL_EXPORTER_OTLP_ENDPOINT: $OTEL_EXPORTER_OTLP_ENDPOINT"
