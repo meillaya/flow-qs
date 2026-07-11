@@ -1,5 +1,9 @@
 # Enten v2: Distributed Observability Platform
 
+[![Lint](https://github.com/Meillaya/enten-v2/actions/workflows/lint.yaml/badge.svg?branch=main)](https://github.com/Meillaya/enten-v2/actions/workflows/lint.yaml)
+[![Test](https://github.com/Meillaya/enten-v2/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/Meillaya/enten-v2/actions/workflows/test.yaml)
+[![Build Images](https://github.com/Meillaya/enten-v2/actions/workflows/build-images.yaml/badge.svg?branch=main)](https://github.com/Meillaya/enten-v2/actions/workflows/build-images.yaml)
+
 A Kubernetes-deployed distributed observability and incident response platform for a polyglot e-commerce microservices demo. OpenTelemetry SDKs instrument every service; the OTLP Collector routes traces to Tempo, logs to Loki, and metrics to Prometheus. Grafana provides correlated dashboards, and Prometheus multi-window burn-rate alerts flow through Alertmanager to an incident engine that assembles timelines and generates Markdown postmortems.
 
 **Resume bullet**: Built a Kubernetes-deployed distributed observability platform using OpenTelemetry, Prometheus, Grafana, Loki, and Tempo to collect traces, logs, and metrics, detect SLO violations, run chaos experiments, and generate automated incident reports.
