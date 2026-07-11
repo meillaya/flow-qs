@@ -68,8 +68,8 @@ def _build_summary(record: IncidentRecord) -> str:
         f"On {record.starts_at}, the alert `{record.alertname}` fired against the "
         f"`{record.service}` service at severity `{record.severity}`. "
         f"The incident {duration_text}. "
-        f"The incident-engine correlated traces from Tempo, logs from Loki, and "
-        f"metric snapshots from Prometheus, then produced this postmortem for "
+        f"The incident-engine queried Tempo, Loki, and Prometheus for available "
+        f"context, then produced this postmortem for "
         f"human review."
     )
 

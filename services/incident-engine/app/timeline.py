@@ -81,27 +81,57 @@ def build_timeline(
             TimelineEvent(
                 timestamp=trace.start_time,
                 source="tempo",
-                message=f"Trace observed for service '{trace.root_service or service}' (duration {trace.duration_ms:.1f}ms)",
+                message=(
+                    f"Trace {trace.trace_id} observed for service "
+                    f"'{trace.root_service or service}' (duration {trace.duration_ms:.1f}ms)"
+                ),
                 severity="info",
                 details={"trace_id": trace.trace_id, "duration_ms": trace.duration_ms},
             )
         )
 
+    trace_count = sum(1 for event in events if event.source == "tempo")
+    if trace_count == 0:
+        events.append(
+            TimelineEvent(
+                timestamp=_iso(alert_starts_at),
+                source="tempo",
+                message="No Tempo traces returned for the incident window",
+                details={"service": service, "empty": True},
+            )
+        )
+
+    log_count = 0
     for log in logs:
         if not log.timestamp:
             continue
+        log_count += 1
         snippet = log.line if len(log.line) < 200 else f"{log.line[:197]}..."
+        trace_id = log.labels.get("trace_id") or log.labels.get("otelTraceID") or ""
+        trace_context = f" (trace {trace_id})" if trace_id else ""
         events.append(
             TimelineEvent(
                 timestamp=log.timestamp,
                 source="loki",
-                message=f"Log entry: {snippet}",
+                message=f"Log entry{trace_context}: {snippet}",
                 severity="info",
-                details={"labels": log.labels, "line": log.line},
+                details={"labels": log.labels, "line": log.line, "trace_id": trace_id},
             )
         )
 
+    if log_count == 0:
+        events.append(
+            TimelineEvent(
+                timestamp=_iso(alert_starts_at),
+                source="loki",
+                message="No Loki logs returned for the incident window",
+                details={"service": service, "empty": True},
+            )
+        )
+
+    metric_count = 0
     for snap in metrics:
+        metric_count += 1
         events.append(
             TimelineEvent(
                 timestamp=snap.timestamp or _iso(alert_starts_at),
@@ -109,6 +139,16 @@ def build_timeline(
                 message=f"Metric snapshot: {snap.name}={snap.value}",
                 severity="warning" if snap.name == "error_rate" and snap.value > 0 else "info",
                 details={"labels": snap.labels, "value": snap.value},
+            )
+        )
+
+    if metric_count == 0:
+        events.append(
+            TimelineEvent(
+                timestamp=_iso(alert_starts_at),
+                source="prometheus",
+                message="No Prometheus samples returned for the incident window",
+                details={"service": service, "empty": True},
             )
         )
 

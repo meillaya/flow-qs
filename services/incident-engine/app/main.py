@@ -279,7 +279,12 @@ async def _process_alert(
     lookback_start = starts_at - timedelta(minutes=LOOKBACK_MINUTES)
 
     traces = await state.context.fetch_traces(service, lookback_start, lookback_end)
-    logs = await state.context.fetch_logs(service, lookback_start, lookback_end)
+    logs = await state.context.fetch_logs(
+        service,
+        lookback_start,
+        lookback_end,
+        trace_ids=[trace.trace_id for trace in traces],
+    )
     metrics_snapshots = await state.context.fetch_metrics(service, lookback_start, lookback_end)
 
     experiments = (
@@ -288,6 +293,16 @@ async def _process_alert(
         else _chaos_state_snapshot()
     )
     correlated = correlate_chaos(service, experiments, starts_at)
+    incident_id = uuid.uuid5(
+        uuid.NAMESPACE_OID,
+        f"{fingerprint}:{starts_at.isoformat()}",
+    ).hex
+    existing = state.store.get(incident_id)
+    authoritative_chaos = (
+        existing.correlated_chaos
+        if existing is not None and existing.correlated_chaos
+        else correlated
+    )
     timeline_events = build_timeline(
         alert_starts_at=starts_at,
         alert_ends_at=ends_at,
@@ -296,7 +311,7 @@ async def _process_alert(
         traces=traces,
         logs=logs,
         metrics=metrics_snapshots,
-        chaos_experiments=correlated,
+        chaos_experiments=authoritative_chaos,
     )
 
     if payload_status == "resolved" or alert.status == "resolved" or ends_at is not None:
@@ -305,19 +320,19 @@ async def _process_alert(
         record_status = "firing"
 
     now = datetime.now(UTC).isoformat()
-    incident_id = uuid.uuid5(
-        uuid.NAMESPACE_OID,
-        f"{fingerprint}:{starts_at.isoformat()}",
-    ).hex
-
-    existing = state.store.get(incident_id)
     if existing is not None:
         # Update mutable fields only; preserve created_at.
         existing.status = record_status
         existing.updated_at = now
         existing.ends_at = ends_at.isoformat() if ends_at else existing.ends_at
+        previous_events = [TimelineEvent(**event) for event in existing.timeline]
+        unique_events = {
+            (event.timestamp, event.source, event.message): event
+            for event in [*previous_events, *timeline_events]
+        }
+        timeline_events = sorted(unique_events.values(), key=lambda event: event.timestamp)
         existing.timeline = [event.to_dict() for event in timeline_events]
-        existing.correlated_chaos = correlated
+        existing.correlated_chaos = authoritative_chaos
         record = existing
     else:
         record = IncidentRecord(
@@ -337,7 +352,7 @@ async def _process_alert(
             annotations=dict(alert.annotations),
             labels=dict(alert.labels),
             timeline=[event.to_dict() for event in timeline_events],
-            correlated_chaos=correlated,
+            correlated_chaos=authoritative_chaos,
         )
 
     record.summary = build_summary(record)

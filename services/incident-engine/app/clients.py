@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -45,7 +47,14 @@ class UpstreamContext(Protocol):
     """Protocol for the upstream context fetcher used by main.py."""
 
     async def fetch_traces(self, service: str, start: datetime, end: datetime, limit: int = 10) -> list[TraceHit]: ...
-    async def fetch_logs(self, service: str, start: datetime, end: datetime, limit: int = 20) -> list[LogHit]: ...
+    async def fetch_logs(
+        self,
+        service: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 20,
+        trace_ids: list[str] | None = None,
+    ) -> list[LogHit]: ...
     async def fetch_metrics(self, service: str, start: datetime, end: datetime) -> list[MetricSnapshot]: ...
     async def notify_webhook(self, url: str, payload: dict[str, Any]) -> bool: ...
 
@@ -76,8 +85,14 @@ class HTTPXUpstreamContext:
     async def fetch_traces(self, service: str, start: datetime, end: datetime, limit: int = 10) -> list[TraceHit]:
         """Query Tempo's search API for traces matching `service.name=<service>`."""
         url = f"{self.tempo_url}/api/search"
+        service_literal = json.dumps(service)
+        service_pattern = json.dumps(f".*{re.escape(service)}.*")
         params = {
-            "tags": f"service.name={service}",
+            "q": (
+                f"{{ resource.service.name = {service_literal} || "
+                f"span.http.url =~ {service_pattern} || "
+                f"span.server.address =~ {service_pattern} }}"
+            ),
             "limit": str(limit),
             "start": str(int(start.timestamp())),
             "end": str(int(end.timestamp())),
@@ -91,16 +106,17 @@ class HTTPXUpstreamContext:
             return []
 
         hits: list[TraceHit] = []
-        for trace in data.get("traces", []) or [][:limit]:
-            trace_id = str(trace.get("traceID") or trace.get("traceId") or "")
-            if not trace_id:
+        for trace in (data.get("traces", []) or [])[:limit]:
+            raw_trace_id = str(trace.get("traceID") or trace.get("traceId") or "")
+            if not raw_trace_id:
                 continue
+            trace_id = raw_trace_id.zfill(32)
             root = trace.get("rootServiceName") or ""
-            duration_ms = float(trace.get("duration") or 0) / 1_000_000.0
-            start_time_ms = int(trace.get("startTime") or 0)
+            duration_ms = float(trace.get("durationMs") or 0)
+            start_time_ns = int(trace.get("startTimeUnixNano") or 0)
             start_iso = (
-                datetime.fromtimestamp(start_time_ms / 1000.0, tz=UTC).isoformat()
-                if start_time_ms
+                datetime.fromtimestamp(start_time_ns / 1_000_000_000, tz=UTC).isoformat()
+                if start_time_ns
                 else ""
             )
             hits.append(
@@ -113,11 +129,27 @@ class HTTPXUpstreamContext:
             )
         return hits
 
-    async def fetch_logs(self, service: str, start: datetime, end: datetime, limit: int = 20) -> list[LogHit]:
-        """Query Loki's range query API for `{service="<service>"}` in the window."""
+    async def fetch_logs(
+        self,
+        service: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 20,
+        trace_ids: list[str] | None = None,
+    ) -> list[LogHit]:
+        """Query Loki by Tempo trace IDs, falling back to OTLP service labels."""
         url = f"{self.loki_url}/loki/api/v1/query_range"
+        valid_trace_ids = [
+            trace_id for trace_id in trace_ids or [] if re.fullmatch(r"[a-fA-F0-9]{16,64}", trace_id)
+        ]
+        if valid_trace_ids:
+            trace_pattern = "|".join(re.escape(trace_id) for trace_id in valid_trace_ids)
+            query = f'{{service_name=~".+"}} | trace_id=~"{trace_pattern}"'
+        else:
+            service_pattern = re.escape(service).replace(r"\-", "-")
+            query = f'{{service_name=~".*{service_pattern}.*"}}'
         params = {
-            "query": f'{{service="{service}"}}',
+            "query": query,
             "start": str(int(start.timestamp() * 1_000_000_000)),
             "end": str(int(end.timestamp() * 1_000_000_000)),
             "limit": str(limit),
@@ -149,16 +181,18 @@ class HTTPXUpstreamContext:
         return hits
 
     async def fetch_metrics(self, service: str, start: datetime, end: datetime) -> list[MetricSnapshot]:
-        """Query Prometheus for error rate and latency p99 at the alert time."""
+        """Query Prometheus for the synthetic signal and availability SLI."""
         step = "30s"
         snapshots: list[MetricSnapshot] = []
 
+        service_pattern = re.escape(service).replace(r"\-", "-")
+        metric_service = re.sub(r"[^a-zA-Z0-9_-]", "", service)
         queries = {
-            "error_rate": (
-                f'sum(rate({{__name__=~"http_requests_total"}},service="{service}")[1m])'
+            "synthetic_check_success": (
+                f'synthetic_check_success{{service=~".*{service_pattern}.*"}}'
             ),
-            "latency_p99": (
-                f'histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{{service="{service}"}}[1m])))'
+            "availability_ratio_5m": (
+                f'{{__name__="sli:{metric_service}:availability:ratio_5m"}}'
             ),
         }
 
@@ -229,7 +263,15 @@ class StaticUpstreamContext:
     async def fetch_traces(self, service: str, start: datetime, end: datetime, limit: int = 10) -> list[TraceHit]:
         return list(self.traces)[:limit]
 
-    async def fetch_logs(self, service: str, start: datetime, end: datetime, limit: int = 20) -> list[LogHit]:
+    async def fetch_logs(
+        self,
+        service: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 20,
+        trace_ids: list[str] | None = None,
+    ) -> list[LogHit]:
+        del service, start, end, trace_ids
         return list(self.logs)[:limit]
 
     async def fetch_metrics(self, service: str, start: datetime, end: datetime) -> list[MetricSnapshot]:
