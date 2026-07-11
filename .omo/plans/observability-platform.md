@@ -64,6 +64,18 @@ Pre-planning analyst (Metis) timed out before producing findings. Planner applie
 - **CI**: GitHub Actions with `ubuntu-latest` runners; matrix on Python 3.12 / Go 1.22; push to `ghcr.io` (GitHub Container Registry).
 - **Test tooling**: `pytest`, `pytest-asyncio`, `httpx` (test client), `testcontainers` (for integration with real Tempo/Loki/Prom in CI), `grpcurl` (gRPC QA), `k6` (load QA), `kubectl` + `kustomize` (K8s QA).
 
+### Execution-time compatibility amendments
+
+Live failing-first verification established five necessary corrections to the original draft:
+
+- devenv 2.x declares executable scripts in `devenv.nix`; `devenv.yaml` is reserved for inputs/configuration.
+- The Collector's synchronized repository-owned Helm chart is the deployment source of truth; maintaining a second Kustomize deployment path caused configuration drift.
+- Tempo 2.9 rejects `querier.max_query_duration`, so the removed field must not be reintroduced.
+- Loki 3.x schema v13 uses TSDB/tsdb-shipper; boltdb-shipper is a legacy store incompatible with the selected chart contract.
+- Order status uses the payment gateway's canonical `GetStatus(charge_id)` RPC, avoiding a second incompatible payment protocol.
+
+These amendments preserve the requested behavior while replacing invalid or duplicate implementation mechanisms discovered during real deployment.
+
 ---
 
 ## Work Objectives
@@ -90,7 +102,7 @@ Ship a runnable, portfolio-grade Kubernetes-deployed observability platform that
 
 ### Must Have
 - All 7 services (6 user + incident-engine) deployed and reachable
-- OTel SDK in every service auto-instrumenting HTTP server, HTTP client, AND gRPC
+- OTel SDK in every service auto-instrumenting each protocol that service actually uses (HTTP server, HTTP client, and/or gRPC)
 - OTel Collector receiving OTLP from all services on `4317` (gRPC) and `4318` (HTTP)
 - Tempo + Loki + Prometheus all receiving data and queryable via HTTP API
 - Grafana datasources provisioned (Tempo, Loki, Prometheus, Alertmanager)
@@ -268,7 +280,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
 
   **What to do**:
   - Create `devenv.nix` providing all required tooling with pinned versions
-  - Create `devenv.yaml` declaring scripts: `up`, `down`, `clean`, `demo`, `lint`, `test`
+  - Declare scripts `up`, `down`, `clean`, `demo`, `lint`, `test` in `devenv.nix`; `devenv.yaml` remains the supported inputs/config file
   - Configure `languages.python = { enable = true; version = "3.12"; }` with uv-managed deps via `[uv]`
   - Configure `languages.go = { enable = true; version = "1.22"; }`
   - Pin: terraform 1.7+, kubectl 1.29+, helm 3.14+, k6 0.50+, grpcurl 1.8+, kustomize 5+
@@ -419,7 +431,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
     - Exporters: `otlp/tempo` (traces → Tempo :4317), `otlphttp/loki` (logs → Loki :3100), `prometheusremotewrite` (metrics → Prom :9090)
     - Service: pipelines for traces, logs, metrics; telemetry logs at info level
   - Create `infra/otel-collector/helm/` chart: Deployment (2 replicas, 256MB/512MB), Service (ClusterIP, ports 4317+4318+8889 for health), ConfigMap mounting the config, ServiceAccount with minimal RBAC
-  - Apply via `kubectl apply -k infra/otel-collector/kustomize/` after `kustomize build`
+  - Deploy through the repository-owned `infra/otel-collector/helm/` chart; render and validate the synchronized Collector configuration before Helm upgrade
   - Add `infra/otel-collector/values.yaml` with resource limits
 
   **Must NOT do**:
@@ -450,7 +462,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
     Tool: Bash (kubectl + curl)
     Preconditions: Cluster running
     Steps:
-      1. kubectl apply -k infra/otel-collector/kustomize/
+      1. helm upgrade --install otel-collector infra/otel-collector/helm -n observability --create-namespace
       2. kubectl wait --for=condition=ready pod -l app=otel-collector -n observability --timeout=60s
       3. kubectl logs -l app=otel-collector -n observability --tail=20
       4. curl http://localhost:8889/status
@@ -488,7 +500,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
     - `storage.trace.backend: local` + `local.path: /var/tempo/traces`
     - `storage.trace.wal: local` (write-ahead-log)
     - `compactor.compaction.block_retention: 168h` (7 days)
-    - `querier.max_query_duration: 0` (no limit for demo)
+    - Do not set the removed `querier.max_query_duration` field; Tempo 2.9 rejects it, so use the chart's supported default query limit
     - Service: ports 3100 (HTTP), 4317 (OTLP gRPC) — but in this case we go through Collector
     - Persistence: PVC 10Gi for traces + WAL
   - Deploy via `helm install tempo grafana/tempo -n observability -f infra/tempo/helm-values.yaml`
@@ -558,7 +570,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Create `infra/loki/helm-values.yaml`:
     - Single binary mode (`deploymentMode: SingleBinary`)
     - Storage: `filesystem` (PVC 10Gi at `/loki`)
-    - Schema: v13 with boltdb-shipper
+    - Schema: v13 with TSDB/tsdb-shipper (the supported Loki 3.x single-binary store; boltdb-shipper is legacy)
     - Limits: `retention_period: 168h` (7 days), `ingestion_rate_mb: 50`, `ingestion_burst_size_mb: 100`
     - Service ports: 3100 (HTTP)
     - Auth: disabled
@@ -1109,7 +1121,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
     - Schema: `orders(id TEXT PRIMARY KEY, user_id TEXT, items JSON, total_cents INT, status TEXT, created_at TIMESTAMP)`
     - Statuses: `pending`, `paid`, `failed`, `shipped`
   - gRPC client to payment-gateway for status queries (NOT for charging — that's checkout's job)
-    - `payment.v1.PaymentService.GetPaymentStatus(order_id)`
+    - Canonical gateway RPC `payment.v1.PaymentService.GetStatus(charge_id)`; order persists the returned charge ID for status lookups
   - OTel auto-instrumentation: FastAPI + SQLite + requests + grpcio
   - Same test/lint/build pattern
 
@@ -1650,7 +1662,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
   - Files: `dashboards/*.json`, `dashboards/kustomization.yaml`
   - Pre-commit: `curl -sf -u admin:admin http://localhost:3000/api/dashboards/uid/service-overview | jq .meta.slug`
 
-- [ ] 18. Alertmanager configuration (route to incident-engine + secondary receiver)
+- [x] 18. Alertmanager configuration (route to incident-engine + secondary receiver)
 
   **What to do**:
   - Refine `infra/prometheus/alertmanager-config.yaml` from Task 6:
@@ -2383,24 +2395,23 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
 
 ## Final Verification Wave (MANDATORY — after ALL implementation tasks)
 
-> 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
+> 4 review agents run in PARALLEL. ALL must APPROVE, followed by the autonomous global review and debugging gates required by the active start-work workflow.
 >
-> **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
-> **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback -> fix -> re-run -> present again -> wait for okay.
+> Rejection or review feedback triggers a fix-and-rerun loop. Mark F1-F4 complete only after their independent evidence is current and approved.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read the plan end-to-end. For each "Must Have": verify implementation exists (read file, run command, curl endpoint). For each "Must NOT Have": search codebase for forbidden patterns — reject with file:line if found. Check evidence files exist in `.omo/evidence/`. Compare deliverables against plan.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   Run `ruff check`, `ty check`, `pytest`, `go vet`, `go test ./...`, `terraform validate`, `helm lint`. Review all changed files for: type suppression (no `# type: ignore` without justification), empty `except:` blocks, debug `print`/`console.log` in prod code, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names (`data`, `result`, `item`, `temp`).
   Output: `Ruff [PASS/FAIL] | ty [PASS/FAIL] | pytest [N pass/N fail] | go vet [PASS/FAIL] | go test [N pass/N fail] | terraform validate [PASS/FAIL] | helm lint [N/N pass] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high`
+- [x] F3. **Real Manual QA** — `unspecified-high`
   Start from clean state (`devenv shell -- make clean && make up`). Execute EVERY QA scenario from EVERY task — follow exact steps, capture evidence. Test cross-task integration (services talking, telemetry flowing, alerts firing, postmortems generated). Test edge cases: OTel Collector down (kill pod, verify services retry), Tempo down (verify Prom still works), chaos with no recovery. Save to `.omo/evidence/final-qa/`.
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   For each task: read "What to do", read actual diff. Verify 1:1 — everything in spec was built (no missing), nothing beyond spec was built (no creep). Check "Must NOT do" compliance. Detect cross-task contamination: Task N touching Task M's files. Flag unaccounted changes. Specifically check: no docker-compose, no real payment processor, no AuthN, no message broker, no API gateway.
   Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 
