@@ -56,25 +56,23 @@ class GrpcInventoryClient:
         Raises grpc.RpcError on transport-level failures (lets the orchestrator
         treat them as recoverable with rollback).
         """
-        req = inventory_pb2.ReserveStockRequest(sku=sku, quantity=quantity)
-        resp = await self._get_stub().ReserveStock(
-            req, timeout=settings.grpc_timeout_seconds
-        )
-        if resp.status == inventory_pb2.ReserveStockResponse.STATUS_INSUFFICIENT:
-            return None
-        if resp.status == inventory_pb2.ReserveStockResponse.STATUS_OK:
-            return Reservation(
-                sku=sku, quantity=quantity, reservation_id=resp.reservation_id
+        req = inventory_pb2.ReserveRequest(sku=sku, quantity=quantity)
+        try:
+            resp = await self._get_stub().ReserveStock(
+                req, timeout=settings.grpc_timeout_seconds
             )
-        # STATUS_UNSPECIFIED - treat as failure but with a clear log line
-        logger.warning("inventory.reserve: unspecified status for sku=%s", sku)
-        return None
+        except grpc.aio.AioRpcError as exc:
+            if exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
+                return None
+            raise
+        if not resp.success:
+            return None
+        return Reservation(sku=sku, quantity=quantity)
 
     async def release(self, reservation: Reservation) -> None:
         """Idempotent. Swallows gRPC errors after logging - rollback must keep
         moving even if the inventory service is momentarily unhappy."""
-        req = inventory_pb2.ReleaseStockRequest(
-            reservation_id=reservation.reservation_id,
+        req = inventory_pb2.ReleaseRequest(
             sku=reservation.sku,
             quantity=reservation.quantity,
         )
@@ -84,16 +82,18 @@ class GrpcInventoryClient:
             )
         except (grpc.RpcError, asyncio.CancelledError):
             logger.exception(
-                "inventory.release failed for reservation_id=%s", reservation.reservation_id
+                "inventory.release failed for sku=%s", reservation.sku
             )
 
     async def health(self) -> bool:
         try:
-            req = inventory_pb2.CheckStockRequest(sku="__health__")
-            await self._get_stub().CheckStock(
-                req, timeout=settings.grpc_timeout_seconds
+            if self._channel is None:
+                self._channel = grpc.aio.insecure_channel(self._addr)
+                self._owns_channel = True
+            await asyncio.wait_for(
+                self._channel.channel_ready(), timeout=settings.grpc_timeout_seconds
             )
             return True
-        except grpc.RpcError as exc:
+        except (TimeoutError, grpc.RpcError) as exc:
             logger.warning("inventory health: %s", exc)
             return False

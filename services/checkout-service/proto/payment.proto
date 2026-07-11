@@ -2,14 +2,21 @@ syntax = "proto3";
 
 package payment.v1;
 
-option go_package = "github.com/enten-v2/payment-gateway/proto/payment/v1";
+option go_package = "github.com/example/payment-gateway/github.com/example/payment-gateway/gen/proto/payment/v1;paymentv1";
 
-// PaymentService is implemented by payment-gateway. Checkout-service uses
-// Charge and Refund; order-service uses GetPaymentStatus.
+// PaymentService exposes charge, status, and refund operations.
 service PaymentService {
   rpc Charge(ChargeRequest) returns (ChargeResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
   rpc Refund(RefundRequest) returns (RefundResponse);
-  rpc GetPaymentStatus(GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+}
+
+// Status represents the lifecycle state of a charge.
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  APPROVED = 1;
+  DECLINED = 2;
+  REFUNDED = 3;
 }
 
 message ChargeRequest {
@@ -19,14 +26,19 @@ message ChargeRequest {
 }
 
 message ChargeResponse {
-  enum Status {
-    STATUS_UNSPECIFIED = 0;
-    STATUS_APPROVED = 1;
-    STATUS_DECLINED = 2;
-  }
-  Status status = 1;
-  string charge_id = 2;
-  string reason = 3; // populated when status == STATUS_DECLINED
+  string charge_id = 1;
+  Status status = 2;
+}
+
+message GetStatusRequest {
+  string charge_id = 1;
+}
+
+message GetStatusResponse {
+  string charge_id = 1;
+  string order_id = 2;
+  int64 amount_cents = 3;
+  Status status = 4;
 }
 
 message RefundRequest {
@@ -34,20 +46,6 @@ message RefundRequest {
 }
 
 message RefundResponse {
-  enum Status {
-    STATUS_UNSPECIFIED = 0;
-    STATUS_OK = 1;
-    STATUS_NOT_FOUND = 2;
-  }
-  Status status = 1;
-}
-
-message GetPaymentStatusRequest {
-  string order_id = 1;
-}
-
-message GetPaymentStatusResponse {
-  string order_id = 1;
-  string status = 2; // pending | succeeded | failed | refunded
-  string transaction_id = 3;
+  string charge_id = 1;
+  Status status = 2;
 }

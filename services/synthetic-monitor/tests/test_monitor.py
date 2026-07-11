@@ -109,3 +109,24 @@ async def test_poll_loop_resets_failure_count_on_success(monkeypatch, one_target
         await task
 
     assert route.call_count >= 2
+
+
+def test_failure_threshold_emits_otel_span_event(monkeypatch) -> None:
+    """A threshold breach records a structured event on the current OTel span."""
+    from app import main as main_module
+
+    events: list[tuple[str, dict[str, int | str]]] = []
+
+    class RecordingSpan:
+        def add_event(self, name: str, attributes: dict[str, int | str]) -> None:
+            events.append((name, attributes))
+
+    monkeypatch.setattr(main_module.trace, "get_current_span", RecordingSpan)
+    main_module._emit_failure_event("catalog-service:8000")
+
+    assert events == [
+        (
+            "synthetic_failure",
+            {"service.name": "catalog-service:8000", "failure.count": 3},
+        )
+    ]

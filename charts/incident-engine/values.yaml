@@ -30,7 +30,7 @@ resources:
 env:
   TEMPO_URL: "http://tempo.observability:3200"
   LOKI_URL: "http://loki.observability:3100"
-  PROM_URL: "http://prometheus.observability:9090"
+  PROM_URL: "http://prometheus.observability"
   POSTMORTEM_DIR: "/postmortems"
   INCIDENT_DB_PATH: "/data/incidents.db"
   LOOKBACK_MINUTES: "5"
@@ -53,3 +53,7 @@ serviceMonitor:
   enabled: false
   interval: 30s
   path: /metrics
+
+chaosApi:
+  enabled: true
+  namespace: chaos-testing

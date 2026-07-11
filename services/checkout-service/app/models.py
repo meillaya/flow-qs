@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field
 class CartItem(BaseModel):
     sku: str
     qty: int = Field(ge=1)
-    unit_cents: int = Field(ge=0)
 
 
 class CartView(BaseModel):
@@ -28,7 +27,6 @@ class Reservation(BaseModel):
     """A single inventory reservation, used to roll back on failure."""
     sku: str
     quantity: int
-    reservation_id: str
 
 
 class PaymentCharge(BaseModel):

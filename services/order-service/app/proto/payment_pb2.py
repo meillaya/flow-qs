@@ -24,18 +24,28 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rpayment.proto\x12\npayment.v1\"+\n\x17GetPaymentStatusRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"T\n\x18GetPaymentStatusResponse\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x16\n\x0etransaction_id\x18\x03 \x01(\t2o\n\x0ePaymentService\x12]\n\x10GetPaymentStatus\x12#.payment.v1.GetPaymentStatusRequest\x1a$.payment.v1.GetPaymentStatusResponseB6Z4github.com/enten-v2/payment-gateway/proto/payment/v1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rpayment.proto\x12\npayment.v1\"K\n\rChargeRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12\x14\n\x0c\x61mount_cents\x18\x02 \x01(\x03\x12\x12\n\ncard_token\x18\x03 \x01(\t\"G\n\x0e\x43hargeResponse\x12\x11\n\tcharge_id\x18\x01 \x01(\t\x12\"\n\x06status\x18\x02 \x01(\x0e\x32\x12.payment.v1.Status\"%\n\x10GetStatusRequest\x12\x11\n\tcharge_id\x18\x01 \x01(\t\"r\n\x11GetStatusResponse\x12\x11\n\tcharge_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x14\n\x0c\x61mount_cents\x18\x03 \x01(\x03\x12\"\n\x06status\x18\x04 \x01(\x0e\x32\x12.payment.v1.Status\"\"\n\rRefundRequest\x12\x11\n\tcharge_id\x18\x01 \x01(\t\"G\n\x0eRefundResponse\x12\x11\n\tcharge_id\x18\x01 \x01(\t\x12\"\n\x06status\x18\x02 \x01(\x0e\x32\x12.payment.v1.Status*J\n\x06Status\x12\x16\n\x12STATUS_UNSPECIFIED\x10\x00\x12\x0c\n\x08\x41PPROVED\x10\x01\x12\x0c\n\x08\x44\x45\x43LINED\x10\x02\x12\x0c\n\x08REFUNDED\x10\x03\x32\xdc\x01\n\x0ePaymentService\x12?\n\x06\x43harge\x12\x19.payment.v1.ChargeRequest\x1a\x1a.payment.v1.ChargeResponse\x12H\n\tGetStatus\x12\x1c.payment.v1.GetStatusRequest\x1a\x1d.payment.v1.GetStatusResponse\x12?\n\x06Refund\x12\x19.payment.v1.RefundRequest\x1a\x1a.payment.v1.RefundResponseBfZdgithub.com/example/payment-gateway/github.com/example/payment-gateway/gen/proto/payment/v1;paymentv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'payment_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z4github.com/enten-v2/payment-gateway/proto/payment/v1'
-  _globals['_GETPAYMENTSTATUSREQUEST']._serialized_start=29
-  _globals['_GETPAYMENTSTATUSREQUEST']._serialized_end=72
-  _globals['_GETPAYMENTSTATUSRESPONSE']._serialized_start=74
-  _globals['_GETPAYMENTSTATUSRESPONSE']._serialized_end=158
-  _globals['_PAYMENTSERVICE']._serialized_start=160
-  _globals['_PAYMENTSERVICE']._serialized_end=271
+  _globals['DESCRIPTOR']._serialized_options = b'Zdgithub.com/example/payment-gateway/github.com/example/payment-gateway/gen/proto/payment/v1;paymentv1'
+  _globals['_STATUS']._serialized_start=443
+  _globals['_STATUS']._serialized_end=517
+  _globals['_CHARGEREQUEST']._serialized_start=29
+  _globals['_CHARGEREQUEST']._serialized_end=104
+  _globals['_CHARGERESPONSE']._serialized_start=106
+  _globals['_CHARGERESPONSE']._serialized_end=177
+  _globals['_GETSTATUSREQUEST']._serialized_start=179
+  _globals['_GETSTATUSREQUEST']._serialized_end=216
+  _globals['_GETSTATUSRESPONSE']._serialized_start=218
+  _globals['_GETSTATUSRESPONSE']._serialized_end=332
+  _globals['_REFUNDREQUEST']._serialized_start=334
+  _globals['_REFUNDREQUEST']._serialized_end=368
+  _globals['_REFUNDRESPONSE']._serialized_start=370
+  _globals['_REFUNDRESPONSE']._serialized_end=441
+  _globals['_PAYMENTSERVICE']._serialized_start=520
+  _globals['_PAYMENTSERVICE']._serialized_end=740
 # @@protoc_insertion_point(module_scope)

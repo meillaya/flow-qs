@@ -263,7 +263,7 @@ class CheckoutOrchestrator:
             payload = {
                 "user_id": req.user_id,
                 "items": [
-                    {"sku": it.sku, "qty": it.qty, "unit_cents": it.unit_cents}
+                    {"sku": it.sku, "qty": it.qty}
                     for it in cart_view.items
                 ],
                 "total_cents": cart_view.total_cents,

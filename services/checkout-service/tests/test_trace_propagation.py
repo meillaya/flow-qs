@@ -17,6 +17,7 @@ unrelated spans.
 """
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import grpc
@@ -51,22 +52,21 @@ class _CapturingInventoryServicer(inventory_pb2_grpc.InventoryServiceServicer):
         self.calls: list[list[tuple[str, str]]] = []
         self._next_id = 1
 
-    async def CheckStock(self, request, context):  # type: ignore[override]
+    async def CheckStock(self, request, context):
         self.calls.append(list(context.invocation_metadata()))
-        return inventory_pb2.CheckStockResponse(sku=request.sku, available=10, reserved=0)
+        return inventory_pb2.StockResponse(sku=request.sku, available=10, reserved=0)
 
-    async def ReserveStock(self, request, context):  # type: ignore[override]
+    async def ReserveStock(self, request, context):
         self.calls.append(list(context.invocation_metadata()))
         rid = f"res-{self._next_id}"
         self._next_id += 1
-        return inventory_pb2.ReserveStockResponse(
-            status=inventory_pb2.ReserveStockResponse.STATUS_OK,
-            reservation_id=rid,
+        return inventory_pb2.ReserveResponse(
+            success=True, available=9, reserved=1, message=rid
         )
 
-    async def ReleaseStock(self, request, context):  # type: ignore[override]
+    async def ReleaseStock(self, request, context):
         self.calls.append(list(context.invocation_metadata()))
-        return inventory_pb2.ReleaseStockResponse(released=True)
+        return inventory_pb2.ReleaseResponse(success=True, available=10, reserved=0)
 
 
 class _CapturingPaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
@@ -74,26 +74,28 @@ class _CapturingPaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
         self.calls: list[list[tuple[str, str]]] = []
         self._next_id = 1
 
-    async def Charge(self, request, context):  # type: ignore[override]
+    async def Charge(self, request, context):
         self.calls.append(list(context.invocation_metadata()))
         cid = f"ch-{self._next_id}"
         self._next_id += 1
         return payment_pb2.ChargeResponse(
-            status=payment_pb2.ChargeResponse.STATUS_APPROVED,
+            status=payment_pb2.APPROVED,
             charge_id=cid,
         )
 
-    async def Refund(self, request, context):  # type: ignore[override]
+    async def Refund(self, request, context):
         self.calls.append(list(context.invocation_metadata()))
-        return payment_pb2.RefundResponse(status=payment_pb2.RefundResponse.STATUS_OK)
+        return payment_pb2.RefundResponse(status=payment_pb2.REFUNDED)
 
-    async def GetPaymentStatus(self, request, context):  # type: ignore[override]
+    async def GetStatus(self, request, context):
         self.calls.append(list(context.invocation_metadata()))
-        return payment_pb2.GetPaymentStatusResponse(order_id=request.order_id, status="succeeded")
+        return payment_pb2.GetStatusResponse(
+            charge_id=request.charge_id, status=payment_pb2.APPROVED
+        )
 
 
 @pytest_asyncio.fixture
-async def inventory_servicer() -> tuple[_CapturingInventoryServicer, str]:
+async def inventory_servicer() -> AsyncIterator[tuple[_CapturingInventoryServicer, str]]:
     servicer = _CapturingInventoryServicer()
     server = grpc.aio.server()
     inventory_pb2_grpc.add_InventoryServiceServicer_to_server(servicer, server)
@@ -106,7 +108,7 @@ async def inventory_servicer() -> tuple[_CapturingInventoryServicer, str]:
 
 
 @pytest_asyncio.fixture
-async def payment_servicer() -> tuple[_CapturingPaymentServicer, str]:
+async def payment_servicer() -> AsyncIterator[tuple[_CapturingPaymentServicer, str]]:
     servicer = _CapturingPaymentServicer()
     server = grpc.aio.server()
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(servicer, server)
@@ -171,8 +173,8 @@ async def test_traceparent_propagates_to_httpx_downstreams(
         # the protocols. We use a no-op fakes here.
         orch = CheckoutOrchestrator(
             cart=cart,
-            inventory=_NoopInventory(),  # type: ignore[arg-type]
-            payment=_NoopPayment(),  # type: ignore[arg-type]
+            inventory=_NoopInventory(),
+            payment=_NoopPayment(),
             order=order,
         )
         await orch.checkout(CheckoutRequest(user_id="alice", payment_method="card"))
@@ -255,7 +257,7 @@ class _NoopInventory:
     async def reserve(self, sku: str, quantity: int):  # pragma: no cover
         from app.models import Reservation
 
-        return Reservation(sku=sku, quantity=quantity, reservation_id="noop")
+        return Reservation(sku=sku, quantity=quantity)
 
     async def release(self, reservation):  # pragma: no cover
         return None

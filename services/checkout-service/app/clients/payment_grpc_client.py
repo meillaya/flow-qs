@@ -3,7 +3,7 @@
 The plan defines proto/payment.proto with three RPCs:
   * Charge         - used during checkout
   * Refund         - used during rollback
-  * GetPaymentStatus - unused here, but kept for proto symmetry
+  * GetStatus       - used by readiness to verify the real gateway contract
 """
 from __future__ import annotations
 
@@ -66,9 +66,9 @@ class GrpcPaymentClient:
         resp = await self._get_stub().Charge(
             req, timeout=settings.grpc_timeout_seconds
         )
-        if resp.status == payment_pb2.ChargeResponse.STATUS_DECLINED:
-            raise PaymentDeclined(resp.reason or "payment declined")
-        if resp.status == payment_pb2.ChargeResponse.STATUS_APPROVED:
+        if resp.status == payment_pb2.DECLINED:
+            raise PaymentDeclined("payment declined")
+        if resp.status == payment_pb2.APPROVED:
             return PaymentCharge(
                 charge_id=resp.charge_id, order_id=order_id, amount_cents=amount_cents
             )
@@ -87,9 +87,9 @@ class GrpcPaymentClient:
 
     async def health(self) -> bool:
         try:
-            # We don't have a dedicated Health RPC, so probe via a cheap GetPaymentStatus.
-            req = payment_pb2.GetPaymentStatusRequest(order_id="__health__")
-            await self._get_stub().GetPaymentStatus(
+            # The gateway has no dedicated health RPC; a missing charge still proves RPC readiness.
+            req = payment_pb2.GetStatusRequest(charge_id="__health__")
+            await self._get_stub().GetStatus(
                 req, timeout=settings.grpc_timeout_seconds
             )
             return True

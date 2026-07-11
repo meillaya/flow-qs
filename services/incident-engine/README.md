@@ -38,7 +38,7 @@ postmortems for the Enten v2 observability platform.
 |----------|---------|---------|
 | `TEMPO_URL` | `http://tempo.observability:3200` | Tempo HTTP API |
 | `LOKI_URL` | `http://loki.observability:3100` | Loki HTTP API |
-| `PROM_URL` | `http://prometheus.observability:9090` | Prometheus HTTP API |
+| `PROM_URL` | `http://prometheus.observability:80` | Prometheus in-cluster Service API |
 | `POSTMORTEM_DIR` | `/postmortems` | Where postmortem.md files are written |
 | `INCIDENT_DB_PATH` | `/data/incidents.db` | SQLite database file |
 | `LOOKBACK_MINUTES` | `5` | Minutes before alert start to fetch context for |

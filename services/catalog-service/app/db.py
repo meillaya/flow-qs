@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from typing import Any
 
@@ -91,7 +92,10 @@ def create_product(product: dict[str, Any]) -> dict[str, Any]:
 
 
 def search_products(query: str) -> list[dict[str, Any]]:
-    """Search products by name (case-insensitive substring match)."""
+    """Search products by name, with optional demo latency injection."""
+    delay_seconds = float(os.environ.get("CATALOG_QUERY_DELAY_SECONDS", "0"))
+    if delay_seconds > 0:
+        time.sleep(delay_seconds)
     like = f"%{query}%"
     with get_connection() as conn:
         rows = conn.execute(

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from app.proto import payment_pb2 as payment__pb2
+from . import payment_pb2 as payment__pb2
 
 GRPC_GENERATED_VERSION = '1.82.1'
 GRPC_VERSION = grpc.__version__
@@ -26,7 +26,8 @@ if _version_not_supported:
 
 
 class PaymentServiceStub:
-    """Missing associated documentation comment in .proto file."""
+    """PaymentService exposes charge, status, and refund operations.
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -34,17 +35,40 @@ class PaymentServiceStub:
         Args:
             channel: A grpc.Channel.
         """
-        self.GetPaymentStatus = channel.unary_unary(
-                '/payment.v1.PaymentService/GetPaymentStatus',
-                request_serializer=payment__pb2.GetPaymentStatusRequest.SerializeToString,
-                response_deserializer=payment__pb2.GetPaymentStatusResponse.FromString,
+        self.Charge = channel.unary_unary(
+                '/payment.v1.PaymentService/Charge',
+                request_serializer=payment__pb2.ChargeRequest.SerializeToString,
+                response_deserializer=payment__pb2.ChargeResponse.FromString,
+                _registered_method=True)
+        self.GetStatus = channel.unary_unary(
+                '/payment.v1.PaymentService/GetStatus',
+                request_serializer=payment__pb2.GetStatusRequest.SerializeToString,
+                response_deserializer=payment__pb2.GetStatusResponse.FromString,
+                _registered_method=True)
+        self.Refund = channel.unary_unary(
+                '/payment.v1.PaymentService/Refund',
+                request_serializer=payment__pb2.RefundRequest.SerializeToString,
+                response_deserializer=payment__pb2.RefundResponse.FromString,
                 _registered_method=True)
 
 
 class PaymentServiceServicer:
-    """Missing associated documentation comment in .proto file."""
+    """PaymentService exposes charge, status, and refund operations.
+    """
 
-    def GetPaymentStatus(self, request, context):
+    def Charge(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Refund(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -53,10 +77,20 @@ class PaymentServiceServicer:
 
 def add_PaymentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'GetPaymentStatus': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetPaymentStatus,
-                    request_deserializer=payment__pb2.GetPaymentStatusRequest.FromString,
-                    response_serializer=payment__pb2.GetPaymentStatusResponse.SerializeToString,
+            'Charge': grpc.unary_unary_rpc_method_handler(
+                    servicer.Charge,
+                    request_deserializer=payment__pb2.ChargeRequest.FromString,
+                    response_serializer=payment__pb2.ChargeResponse.SerializeToString,
+            ),
+            'GetStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetStatus,
+                    request_deserializer=payment__pb2.GetStatusRequest.FromString,
+                    response_serializer=payment__pb2.GetStatusResponse.SerializeToString,
+            ),
+            'Refund': grpc.unary_unary_rpc_method_handler(
+                    servicer.Refund,
+                    request_deserializer=payment__pb2.RefundRequest.FromString,
+                    response_serializer=payment__pb2.RefundResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -67,10 +101,11 @@ def add_PaymentServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class PaymentService:
-    """Missing associated documentation comment in .proto file."""
+    """PaymentService exposes charge, status, and refund operations.
+    """
 
     @staticmethod
-    def GetPaymentStatus(request,
+    def Charge(request,
             target,
             options=(),
             channel_credentials=None,
@@ -83,9 +118,63 @@ class PaymentService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/payment.v1.PaymentService/GetPaymentStatus',
-            payment__pb2.GetPaymentStatusRequest.SerializeToString,
-            payment__pb2.GetPaymentStatusResponse.FromString,
+            '/payment.v1.PaymentService/Charge',
+            payment__pb2.ChargeRequest.SerializeToString,
+            payment__pb2.ChargeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/payment.v1.PaymentService/GetStatus',
+            payment__pb2.GetStatusRequest.SerializeToString,
+            payment__pb2.GetStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Refund(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/payment.v1.PaymentService/Refund',
+            payment__pb2.RefundRequest.SerializeToString,
+            payment__pb2.RefundResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -11,12 +11,21 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Response
-from opentelemetry import metrics
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 logger = logging.getLogger(__name__)
@@ -51,6 +60,35 @@ TARGETS = _parse_targets(os.getenv("SYNTHETIC_TARGETS"))
 _last_results: dict[str, bool] = dict.fromkeys(TARGETS, False)
 
 
+def _setup_otel_traces_and_logs(resource: Resource) -> None:
+    """Configure traces and logs without replacing the application MeterProvider."""
+    trace_provider = TracerProvider(resource=resource)
+    trace_provider.add_span_processor(
+        BatchSpanProcessor(
+            OTLPSpanExporter(
+                endpoint=OTLP_ENDPOINT,
+                insecure=OTLP_ENDPOINT.startswith("http://"),
+                timeout=5,
+            )
+        )
+    )
+    trace.set_tracer_provider(trace_provider)
+
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(
+            OTLPLogExporter(
+                endpoint=OTLP_ENDPOINT,
+                insecure=OTLP_ENDPOINT.startswith("http://"),
+                timeout=5,
+            )
+        )
+    )
+    logging.getLogger().addHandler(
+        LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+    )
+
+
 def _setup_otel_metrics() -> None:
     """Configure OTel meter provider with OTLP + Prometheus readers."""
     resource = Resource.create(
@@ -59,6 +97,8 @@ def _setup_otel_metrics() -> None:
             "deployment.environment": "dev",
         }
     )
+
+    _setup_otel_traces_and_logs(resource)
 
     readers: list = [PrometheusMetricReader()]
 
@@ -95,6 +135,20 @@ async def _poll_one(client: httpx.AsyncClient, url: str) -> tuple[bool, float]:
     return ok, elapsed
 
 
+def _emit_failure_event(target: str) -> None:
+    """Emit the threshold breach through correlated OTel log and span paths."""
+    logger.error(
+        "synthetic_failure: service=%s failed %d consecutive health checks",
+        target,
+        FAILURE_THRESHOLD,
+        extra={"event": "synthetic_failure", "service": target},
+    )
+    trace.get_current_span().add_event(
+        "synthetic_failure",
+        {"service.name": target, "failure.count": FAILURE_THRESHOLD},
+    )
+
+
 async def _poll_loop() -> None:
     """Background loop that polls all targets every POLL_INTERVAL seconds."""
     meter = metrics.get_meter(__name__)
@@ -120,26 +174,24 @@ async def _poll_loop() -> None:
             start_cycle = time.perf_counter()
             for target in TARGETS:
                 url = f"http://{target}{HEALTHZ_PATH}"
-                ok, elapsed = await _poll_one(client, url)
-                _last_results[target] = ok
-                duration_histogram.record(elapsed, {"service": target})
+                with trace.get_tracer(__name__).start_as_current_span("synthetic.check") as span:
+                    span.set_attribute("server.address", target)
+                    ok, elapsed = await _poll_one(client, url)
+                    span.set_attribute("synthetic.check.success", ok)
+                    _last_results[target] = ok
+                    duration_histogram.record(elapsed, {"service": target})
 
-                if ok:
-                    if failure_counts[target] >= FAILURE_THRESHOLD:
-                        logger.info(
-                            "synthetic_recovery: service=%s recovered after failure",
-                            target,
-                        )
-                    failure_counts[target] = 0
-                else:
-                    failure_counts[target] += 1
-                    if failure_counts[target] == FAILURE_THRESHOLD:
-                        logger.error(
-                            "synthetic_failure: service=%s failed %d consecutive health checks",
-                            target,
-                            FAILURE_THRESHOLD,
-                            extra={"event": "synthetic_failure", "service": target},
-                        )
+                    if ok:
+                        if failure_counts[target] >= FAILURE_THRESHOLD:
+                            logger.info(
+                                "synthetic_recovery: service=%s recovered after failure",
+                                target,
+                            )
+                        failure_counts[target] = 0
+                    else:
+                        failure_counts[target] += 1
+                        if failure_counts[target] == FAILURE_THRESHOLD:
+                            _emit_failure_event(target)
 
             elapsed_cycle = time.perf_counter() - start_cycle
             sleep_for = max(0.0, POLL_INTERVAL - elapsed_cycle)
@@ -159,6 +211,9 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Synthetic Monitor", lifespan=_lifespan)
+FastAPIInstrumentor.instrument_app(app)
+HTTPXClientInstrumentor().instrument()
+LoggingInstrumentor().instrument(set_logging_format=True)
 
 
 @app.get("/healthz")

@@ -83,3 +83,33 @@ def test_create_product(client: TestClient) -> None:
     # Duplicate sku should fail with a 409 conflict.
     response = client.post("/products", json=payload)
     assert response.status_code == 409
+
+
+def test_database_error_returns_internal_server_error(monkeypatch) -> None:
+    """A SQLite read failure stays an HTTP 500 rather than false data."""
+    import sqlite3
+
+    from app import main
+
+    def fail_list() -> list[dict[str, object]]:
+        raise sqlite3.OperationalError("database unavailable")
+
+    monkeypatch.setattr(main, "list_products", fail_list)
+    with TestClient(app, raise_server_exceptions=False) as error_client:
+        response = error_client.get("/products")
+
+    assert response.status_code == 500
+
+
+def test_search_latency_injection_preserves_results(client: TestClient, monkeypatch) -> None:
+    """Configured query latency delays search without changing its payload."""
+    import time
+
+    monkeypatch.setenv("CATALOG_QUERY_DELAY_SECONDS", "0.02")
+    started = time.perf_counter()
+    response = client.get("/products/search?q=laptop")
+    elapsed = time.perf_counter() - started
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == "p008"
+    assert elapsed >= 0.02

@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 from typing import Annotated, TypedDict
 
 from fastapi import FastAPI, Path
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from pydantic import BaseModel, Field
 
 
@@ -82,12 +84,15 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
+RequestsInstrumentor().instrument()
+
 app = FastAPI(
     title="Cart Service",
     description="In-memory shopping cart API with OTel instrumentation",
     version="0.1.0",
     lifespan=lifespan,
 )
+FastAPIInstrumentor.instrument_app(app)
 
 
 @app.get("/healthz")

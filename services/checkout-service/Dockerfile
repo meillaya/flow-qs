@@ -35,12 +35,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         "opentelemetry-distro>=0.48b0" \
         "pydantic>=2.7.0"
 
-# Layer 2: app source + generated stubs.
+# Layer 2: app source includes the committed generated and typed gRPC stubs.
 COPY app ./app
-COPY proto ./proto
-COPY proto_gen ./proto_gen
-COPY scripts ./scripts
-RUN /build/scripts/gen_proto.sh
 
 # -- runtime ----------------------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -59,14 +55,11 @@ WORKDIR /app
 # Copy the prepared venv + source
 COPY --from=builder --chown=app:app /build/.venv /app/.venv
 COPY --from=builder --chown=app:app /build/app    /app/app
-COPY --from=builder --chown=app:app /build/proto_gen /app/proto_gen
-COPY --from=builder --chown=app:app /build/proto      /app/proto
 
 USER app
 
 EXPOSE 8003
 
-# otel-distro's `opentelemetry-instrument` wraps uvicorn so the OTel SDK is
-# loaded before any framework code. Falls back to plain uvicorn if the
-# wrapper is missing.
-CMD ["sh", "-c", "exec opentelemetry-instrument uvicorn app.main:app --host 0.0.0.0 --port 8003"]
+# The application initializes FastAPI, HTTPX, and gRPC OTel instrumentation in its lifespan.
+# Running modules avoids non-relocatable console-script shebangs from the builder venv.
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]

@@ -37,7 +37,7 @@ from app.orchestrator import CheckoutOrchestrator
 
 
 @pytest.fixture(scope="session", autouse=True)
-def span_exporter() -> InMemorySpanExporter:
+def span_exporter() -> Iterator[InMemorySpanExporter]:
     exporter = InMemorySpanExporter()
     resource = Resource.create({"service.name": "checkout-service-test"})
     provider = TracerProvider(resource=resource)
@@ -107,7 +107,6 @@ class FakeInventoryClient:
         self.released: list[Any] = []
         self.fail_sku: str | None = None
         self.fail_transport_sku: str | None = None
-        self._next_id = 1
 
     async def reserve(self, sku: str, quantity: int) -> Any:
         from app.models import Reservation
@@ -116,9 +115,7 @@ class FakeInventoryClient:
             raise RuntimeError("simulated transport failure")
         if self.fail_sku and self.fail_sku == sku:
             return None  # insufficient
-        rid = f"res-{self._next_id}"
-        self._next_id += 1
-        r = Reservation(sku=sku, quantity=quantity, reservation_id=rid)
+        r = Reservation(sku=sku, quantity=quantity)
         self.reservations.append(r)
         return r
 

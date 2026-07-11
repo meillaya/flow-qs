@@ -28,11 +28,15 @@ from fastapi.responses import JSONResponse
 from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
+from .chaos import ChaosSource, KubernetesChaosClient
 from .clients import HTTPXUpstreamContext, StaticUpstreamContext, UpstreamContext, parse_iso
 from .postmortem import build_summary, has_all_sections, render_postmortem, to_summary_payload
 from .storage import (
@@ -52,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 TEMPO_URL = os.getenv("TEMPO_URL", "http://tempo.observability:3200")
 LOKI_URL = os.getenv("LOKI_URL", "http://loki.observability:3100")
-PROM_URL = os.getenv("PROM_URL", "http://prometheus.observability:9090")
+PROM_URL = os.getenv("PROM_URL", "http://prometheus.observability")
 LOOKBACK_MINUTES = int(os.getenv("LOOKBACK_MINUTES", "5"))
 RESOLVE_TIMEOUT_MINUTES = int(os.getenv("RESOLVE_TIMEOUT_MINUTES", "30"))
 OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.observability:4317")
@@ -114,6 +118,7 @@ class AppState:
         self.store = IncidentStore(default_db_path(), default_postmortem_dir())
         self.context: UpstreamContext = StaticUpstreamContext()  # placeholder
         self.client: httpx.AsyncClient | None = None
+        self.chaos: ChaosSource | None = None
         self._background_task: asyncio.Task[None] | None = None
 
 
@@ -185,6 +190,7 @@ async def _resolve_reconciler(state: AppState) -> None:
 def create_app(
     context: UpstreamContext | None = None,
     store: IncidentStore | None = None,
+    chaos_source: ChaosSource | None = None,
 ) -> FastAPI:
     """Build a FastAPI instance — accepts overrides for tests."""
     app = FastAPI(
@@ -192,6 +198,10 @@ def create_app(
         description="Alertmanager webhook receiver that emits postmortem.md files.",
         version="0.1.0",
     )
+
+    FastAPIInstrumentor.instrument_app(app)
+    HTTPXClientInstrumentor().instrument()
+    LoggingInstrumentor().instrument(set_logging_format=True)
 
     @asynccontextmanager
     async def _custom_lifespan(app_ref: FastAPI) -> Any:
@@ -210,6 +220,7 @@ def create_app(
                 prom_url=PROM_URL,
                 client=client,
             )
+        state.chaos = chaos_source or KubernetesChaosClient.from_cluster() or RegisteredChaosSource()
         app_ref.state.app_state = state
         try:
             yield
@@ -220,6 +231,9 @@ def create_app(
             if state.client is not None:
                 with contextlib.suppress(Exception):
                     await state.client.aclose()
+            if isinstance(state.chaos, KubernetesChaosClient):
+                with contextlib.suppress(Exception):
+                    await state.chaos.aclose()
 
     app.router.lifespan_context = _custom_lifespan
 
@@ -268,7 +282,12 @@ async def _process_alert(
     logs = await state.context.fetch_logs(service, lookback_start, lookback_end)
     metrics_snapshots = await state.context.fetch_metrics(service, lookback_start, lookback_end)
 
-    correlated = correlate_chaos(service, _chaos_state_snapshot(), starts_at)
+    experiments = (
+        await state.chaos.list_active(service, starts_at)
+        if state.chaos is not None
+        else _chaos_state_snapshot()
+    )
+    correlated = correlate_chaos(service, experiments, starts_at)
     timeline_events = build_timeline(
         alert_starts_at=starts_at,
         alert_ends_at=ends_at,
@@ -344,6 +363,14 @@ def register_chaos_experiment(experiment: dict[str, Any]) -> None:
 def _chaos_state_snapshot() -> list[dict[str, Any]]:
     """Return a copy of the current chaos experiment cache."""
     return list(_chaos_experiments)
+
+
+class RegisteredChaosSource:
+    """Local-only source retained for deterministic offline tests."""
+
+    async def list_active(self, service: str, alert_time: datetime) -> list[dict[str, Any]]:
+        del service, alert_time
+        return _chaos_state_snapshot()
 
 
 def reset_chaos_state() -> None:  # pragma: no cover - test helper

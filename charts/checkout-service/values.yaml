@@ -11,7 +11,7 @@ image:
   # -- Container image tag.
   tag: dev
   # -- Image pull policy.
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 # -- Number of replicas.
 replicaCount: 1
@@ -44,7 +44,7 @@ resources:
 # These are rendered into a ConfigMap and injected into the container.
 env:
   # Address of the cart-service REST endpoint.
-  CART_SERVICE_URL: "http://cart-service:8000"
+  CART_SERVICE_URL: "http://cart-service:8002"
   # Address of the order-service REST endpoint.
   ORDER_SERVICE_URL: "http://order-service:8004"
   # gRPC addresses for the inventory and payment services.

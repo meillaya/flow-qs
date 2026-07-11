@@ -30,7 +30,7 @@ svc-template:
       cpu: "250m"
 
   env:
-    SYNTHETIC_TARGETS: "catalog-service.ecom.svc.cluster.local:8000,inventory-service.ecom.svc.cluster.local:8001,cart-service.ecom.svc.cluster.local:8002,checkout-service.ecom.svc.cluster.local:8003,order-service.ecom.svc.cluster.local:8004,payment-gateway.default.svc.cluster.local:8005"
+    SYNTHETIC_TARGETS: "catalog-service.ecom.svc.cluster.local:8000,inventory-service.ecom.svc.cluster.local:8001,cart-service.ecom.svc.cluster.local:8002,checkout-service-checkout-service.ecom.svc.cluster.local:8003,order-service.ecom.svc.cluster.local:8004,payment-gateway.ecom.svc.cluster.local:8005"
     POLL_INTERVAL: "30"
     FAILURE_THRESHOLD: "3"
 

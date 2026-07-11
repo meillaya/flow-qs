@@ -53,7 +53,7 @@ class Settings:
 
     # -- Downstream service addresses --
     # HTTP services
-    cart_service_url: str = "http://cart-service:8000"
+    cart_service_url: str = "http://cart-service:8002"
     order_service_url: str = "http://order-service:8004"
 
     # gRPC services
@@ -93,7 +93,7 @@ class Settings:
             service_name=_env("OTEL_SERVICE_NAME", "checkout-service"),
             http_host=_env("CHECKOUT_HTTP_HOST", "0.0.0.0"),
             http_port=_env_int("CHECKOUT_HTTP_PORT", 8003),
-            cart_service_url=_env("CART_SERVICE_URL", "http://cart-service:8000"),
+            cart_service_url=_env("CART_SERVICE_URL", "http://cart-service:8002"),
             order_service_url=_env("ORDER_SERVICE_URL", "http://order-service:8004"),
             inventory_grpc_addr=_env("INVENTORY_GRPC_ADDR", "inventory-service:50051"),
             payment_grpc_addr=_env("PAYMENT_GRPC_ADDR", "payment-gateway:50052"),

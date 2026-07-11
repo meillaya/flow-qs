@@ -48,6 +48,8 @@ spec:
               value: "otlp"
             - name: OTEL_LOGS_EXPORTER
               value: "otlp"
+            - name: CHAOS_NAMESPACE
+              value: {{ .Values.chaosApi.namespace | quote }}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}

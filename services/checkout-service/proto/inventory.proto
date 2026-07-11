@@ -1,51 +1,43 @@
 syntax = "proto3";
 
-package inventory.v1;
-
-option go_package = "github.com/enten-v2/inventory-service/proto/inventory/v1";
+package inventory;
 
 service InventoryService {
-  // Check current available stock for a SKU.
-  rpc CheckStock(CheckStockRequest) returns (CheckStockResponse);
-  // Atomically reserve `quantity` units. Returns RESERVE_STATUS_INSUFFICIENT
-  // when not enough stock is available. Reservation_id is required for release.
-  rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
-  // Release a previously created reservation. Idempotent on the same
-  // reservation_id (no-op if already released).
-  rpc ReleaseStock(ReleaseStockRequest) returns (ReleaseStockResponse);
+  rpc CheckStock (StockRequest) returns (StockResponse);
+  rpc ReserveStock (ReserveRequest) returns (ReserveResponse);
+  rpc ReleaseStock (ReleaseRequest) returns (ReleaseResponse);
 }
 
-message CheckStockRequest {
+message StockRequest {
   string sku = 1;
 }
 
-message CheckStockResponse {
+message StockResponse {
   string sku = 1;
   int32 available = 2;
   int32 reserved = 3;
 }
 
-message ReserveStockRequest {
+message ReserveRequest {
   string sku = 1;
   int32 quantity = 2;
 }
 
-message ReserveStockResponse {
-  enum Status {
-    STATUS_UNSPECIFIED = 0;
-    STATUS_OK = 1;
-    STATUS_INSUFFICIENT = 2;
-  }
-  Status status = 1;
-  string reservation_id = 2; // present only when status == STATUS_OK
+message ReserveResponse {
+  bool success = 1;
+  int32 available = 2;
+  int32 reserved = 3;
+  string message = 4;
 }
 
-message ReleaseStockRequest {
-  string reservation_id = 1;
-  string sku = 2;
-  int32 quantity = 3;
+message ReleaseRequest {
+  string sku = 1;
+  int32 quantity = 2;
 }
 
-message ReleaseStockResponse {
-  bool released = 1;
+message ReleaseResponse {
+  bool success = 1;
+  int32 available = 2;
+  int32 reserved = 3;
+  string message = 4;
 }

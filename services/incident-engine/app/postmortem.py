@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -106,7 +107,9 @@ def _build_root_cause(record: IncidentRecord) -> str:
             f"- **{experiment.get('name', 'unknown')}** "
             f"({experiment.get('kind', 'unknown')}) — "
             f"started at {experiment.get('start_time', 'unknown')} "
-            f"targeting `{experiment.get('target', record.service)}`."
+            f"in namespace `{experiment.get('namespace', 'unknown')}` "
+            f"targeting `{experiment.get('target', record.service)}`; "
+            f"spec: `{json.dumps(experiment.get('spec', {}), sort_keys=True)}`."
         )
     lines.append("")
     lines.append(

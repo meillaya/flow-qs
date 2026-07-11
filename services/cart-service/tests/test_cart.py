@@ -95,3 +95,15 @@ def test_multi_user_isolation(client: Any) -> None:
 def test_total_cents_computed(client: Any) -> None:
     response = client.post("/cart/user123/items", json={"sku": "SKU-001", "qty": 3})
     assert response.json()["total_cents"] == 300
+
+
+def test_cart_item_contract_contains_only_sku_and_quantity(client: Any) -> None:
+    """Cart items follow the plan contract consumed by checkout."""
+    response = client.post(
+        "/cart/contract-user/items",
+        json={"sku": "SKU-001", "qty": 2},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [{"sku": "SKU-001", "qty": 2}]
+    assert response.json()["total_cents"] == 200

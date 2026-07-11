@@ -7,10 +7,12 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Annotated
 
+import grpc
 from fastapi import FastAPI, HTTPException, Query
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.grpc import GrpcInstrumentorClient
 from opentelemetry.instrumentation.sqlite3 import SQLite3Instrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -47,6 +49,7 @@ def _setup_tracing() -> None:
 
 _setup_tracing()
 SQLite3Instrumentor().instrument()
+GrpcInstrumentorClient().instrument()
 
 
 def _init_db() -> None:
@@ -155,11 +158,13 @@ def create_order(payload: dict) -> dict:
         )
         conn.commit()
 
-    try:
-        payment_status = get_payment_status(order_id)
-        logger.info("Payment status for order %s: %s", order_id, payment_status)
-    except Exception as exc:
-        logger.warning("Could not query payment status: %s", exc)
+    charge_id = payload.get("payment_charge_id")
+    if isinstance(charge_id, str) and charge_id:
+        try:
+            payment_status = get_payment_status(charge_id)
+            logger.info("Payment status for charge %s: %s", charge_id, payment_status)
+        except grpc.RpcError as exc:
+            logger.warning("Could not query payment status: %s", exc)
 
     return {
         "id": order_id,

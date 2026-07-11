@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROTO_DIR="${ROOT_DIR}/proto"
-OUT_DIR="${ROOT_DIR}/proto_gen"
+OUT_DIR="${ROOT_DIR}/app/proto_gen"
 
 mkdir -p "${OUT_DIR}"
 touch "${OUT_DIR}/__init__.py"
@@ -25,6 +25,7 @@ fi
 "${PYTHON}" -m grpc_tools.protoc \
     -I "${PROTO_DIR}" \
     --python_out="${OUT_DIR}" \
+    --pyi_out="${OUT_DIR}" \
     --grpc_python_out="${OUT_DIR}" \
     "${PROTO_DIR}/inventory.proto" \
     "${PROTO_DIR}/payment.proto"
@@ -49,6 +50,20 @@ new = re.sub(
 if new != text:
     path.write_text(new)
 PY
+    fi
+done
+
+# grpcio-tools currently emits enum metaclasses that ty cannot reconcile with int.
+# The runtime enum wrapper is unchanged; only the static declarations need the base class.
+for f in "${OUT_DIR}"/*_pb2.pyi; do
+    if [[ -f "${f}" ]]; then
+        "${PYTHON}" - "${f}" <<'PYI'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+path.write_text(path.read_text().replace(", metaclass=_enum_type_wrapper.EnumTypeWrapper", ""))
+PYI
     fi
 done
 
