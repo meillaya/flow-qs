@@ -1,0 +1,54 @@
+rule_files:
+  - alert_rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  - interval: 30s
+    input_series:
+      - series: 'synthetic_check_success{service="cart-service.ecom.svc.cluster.local:8002"}'
+        values: '1 1 0 0 0 0'
+      - series: 'synthetic_check_success{service="catalog-service.ecom.svc.cluster.local:8000"}'
+        values: '1 1 0 0 0 0'
+      - series: 'synthetic_check_success{service="checkout-service-checkout-service.ecom.svc.cluster.local:8003"}'
+        values: '1 1 0 0 0 0'
+      - series: 'synthetic_check_success{service="inventory-service.ecom.svc.cluster.local:8001"}'
+        values: '1 1 0 0 0 0'
+      - series: 'synthetic_check_success{service="order-service.ecom.svc.cluster.local:8004"}'
+        values: '1 1 0 0 0 0'
+      - series: 'synthetic_check_success{service="payment-gateway.ecom.svc.cluster.local:8005"}'
+        values: '1 1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: ServiceDown
+        exp_alerts: []
+      - eval_time: 1m30s
+        alertname: ServiceDown
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels: {severity: page, service: cart-service}
+            exp_annotations:
+              summary: cart-service is reporting as down
+              description: cart-service failed synthetic health checks for at least one minute.
+          - exp_labels: {severity: page, service: catalog-service}
+            exp_annotations:
+              summary: catalog-service is reporting as down
+              description: catalog-service failed synthetic health checks for at least one minute.
+          - exp_labels: {severity: page, service: checkout-service}
+            exp_annotations:
+              summary: checkout-service is reporting as down
+              description: checkout-service failed synthetic health checks for at least one minute.
+          - exp_labels: {severity: page, service: inventory-service}
+            exp_annotations:
+              summary: inventory-service is reporting as down
+              description: inventory-service failed synthetic health checks for at least one minute.
+          - exp_labels: {severity: page, service: order-service}
+            exp_annotations:
+              summary: order-service is reporting as down
+              description: order-service failed synthetic health checks for at least one minute.
+          - exp_labels: {severity: page, service: payment-gateway}
+            exp_annotations:
+              summary: payment-gateway is reporting as down
+              description: payment-gateway failed synthetic health checks for at least one minute.

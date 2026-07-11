@@ -52,7 +52,7 @@ spec:
             - name: health
               containerPort: 8889
               protocol: TCP
-            - name: pprof
+            - name: metrics
               containerPort: 8888
               protocol: TCP
           env:

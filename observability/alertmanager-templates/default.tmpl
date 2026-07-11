@@ -12,10 +12,10 @@
 
 {{ define "default.message" -}}
 {{ range .Alerts -}}
-Alert: {{ .Annotations.summary | default .Labels.alertname }}
+Alert: {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Labels.alertname }}{{ end }}
 Status: {{ .Status }}
-Severity: {{ .Labels.severity | default "unknown" }}
-Service: {{ .Labels.service | default "unknown" }}
+Severity: {{ if .Labels.severity }}{{ .Labels.severity }}{{ else }}unknown{{ end }}
+Service: {{ if .Labels.service }}{{ .Labels.service }}{{ else }}unknown{{ end }}
 Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
 Annotations: {{ range .Annotations.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
 Source: {{ .GeneratorURL }}

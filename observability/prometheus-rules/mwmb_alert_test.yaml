@@ -1,0 +1,93 @@
+rule_files:
+  - alert_rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  - interval: 30s
+    input_series:
+      - series: '{__name__="sli:catalog-service:availability:ratio_1h"}'
+        values: '0+0x70'
+      - series: '{__name__="sli:catalog-service:availability:ratio_6h"}'
+        values: '0+0x70'
+      - series: '{__name__="sli:catalog-service:availability:ratio_3d"}'
+        values: '0+0x70'
+      - series: '{__name__="sli:catalog-service:latency_p99:ratio_1h"}'
+        values: '0+0x70'
+      - series: '{__name__="sli:catalog-service:latency_p99:ratio_6h"}'
+        values: '0+0x70'
+      - series: '{__name__="sli:catalog-service:latency_p99:ratio_3d"}'
+        values: '0+0x70'
+    alert_rule_test:
+      - eval_time: 2m30s
+        alertname: SLOAvailabilityBurnTooFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: catalog-service
+              slo_kind: availability
+              burn_window_long: 6h
+              burn_window_short: 1h
+            exp_annotations:
+              summary: catalog-service SLO availability burn rate is unsustainable
+              description: catalog-service availability SLO (0.9995) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate.
+              runbook: https://sre.google/workbook/alerting-on-slos/
+      - eval_time: 2m30s
+        alertname: SLOLatencyBurnTooFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: catalog-service
+              slo_kind: latency_p99
+              burn_window_long: 6h
+              burn_window_short: 1h
+            exp_annotations:
+              summary: catalog-service SLO latency_p99 burn rate is unsustainable
+              description: catalog-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate.
+              runbook: https://sre.google/workbook/alerting-on-slos/
+      - eval_time: 31m
+        alertname: SLOAvailabilityBurnTooFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: catalog-service
+              slo_kind: availability
+              burn_window_long: 6h
+              burn_window_short: 1h
+            exp_annotations:
+              summary: catalog-service SLO availability burn rate is unsustainable
+              description: catalog-service availability SLO (0.9995) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate.
+              runbook: https://sre.google/workbook/alerting-on-slos/
+          - exp_labels:
+              severity: warning
+              service: catalog-service
+              slo_kind: availability
+              burn_window_long: 3d
+              burn_window_short: 6h
+            exp_annotations:
+              summary: catalog-service SLO availability budget is draining steadily
+              description: catalog-service availability SLO (0.9995) is being consumed at >=6x (6h) and >=1x (3d) the normal rate.
+              runbook: https://sre.google/workbook/alerting-on-slos/
+      - eval_time: 31m
+        alertname: SLOLatencyBurnTooFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: catalog-service
+              slo_kind: latency_p99
+              burn_window_long: 6h
+              burn_window_short: 1h
+            exp_annotations:
+              summary: catalog-service SLO latency_p99 burn rate is unsustainable
+              description: catalog-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate.
+              runbook: https://sre.google/workbook/alerting-on-slos/
+          - exp_labels:
+              severity: warning
+              service: catalog-service
+              slo_kind: latency_p99
+              burn_window_long: 3d
+              burn_window_short: 6h
+            exp_annotations:
+              summary: catalog-service SLO latency_p99 budget is draining steadily
+              description: catalog-service latency_p99 SLO (0.9900) is being consumed at >=6x (6h) and >=1x (3d) the normal rate.
+              runbook: https://sre.google/workbook/alerting-on-slos/

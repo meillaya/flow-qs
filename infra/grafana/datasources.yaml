@@ -30,7 +30,7 @@ datasources:
     access: proxy
     orgId: 1
     isDefault: true
-    url: http://prometheus.observability:9090
+    url: http://prometheus.observability:80
     editable: false
     jsonData:
       httpMethod: POST
@@ -85,10 +85,6 @@ datasources:
         datasourceUid: prometheus-observability
       nodeGraph:
         enabled: true
-      streamingEnabled:
-        search: true
-        metrics: true
-        logs: false
     # No credentials — Tempo's OTLP/HTTP endpoint is internal to the cluster.
 
   # =========================================================
@@ -130,4 +126,4 @@ datasources:
     jsonData:
       httpMethod: GET
       handleGrafanaManagedAlerts: false
-      prometheusType: Prometheus
+      implementation: prometheus

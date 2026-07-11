@@ -1,20 +1,12 @@
-# Default values for otel-collector.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
 
-# -----------------------------------------------------------------------------
-# Image
-# -----------------------------------------------------------------------------
 image:
   repository: otel/opentelemetry-collector-contrib
   tag: "0.104.0"
   pullPolicy: IfNotPresent
 
-# -----------------------------------------------------------------------------
 # Replicas — 2 is the minimum for HA; the collector is stateless and easily
 # scaled horizontally because the memory_limiter + batch processors handle
 # backpressure per-replica.
-# -----------------------------------------------------------------------------
 replicaCount: 2
 
 # HPA stub — disabled by default; replicaCount above applies instead.
@@ -24,20 +16,16 @@ autoscaling:
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
 
-# -----------------------------------------------------------------------------
 # ServiceAccount — k8sattributes processor needs to GET pods, namespaces,
 # replicasets, and (optionally) nodes. Created by the chart.
-# -----------------------------------------------------------------------------
 serviceAccount:
   create: true
   name: otel-collector
   annotations: {}
 
-# -----------------------------------------------------------------------------
 # Resources — spec: requests 256Mi/256m, limits 512Mi/500m.
 # The memory limit must be < memory_limiter.limit_mib (1024) so the limiter
 # has headroom; with limit=512Mi the spike_limit=512Mi is a sane safe upper.
-# -----------------------------------------------------------------------------
 resources:
   requests:
     cpu: 256m
@@ -46,11 +34,9 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# -----------------------------------------------------------------------------
 # Service — ClusterIP exposes OTLP gRPC/HTTP and the health-check / pprof
 # ports. The OTLP receivers are NOT exposed externally; only in-cluster
 # services and the local observability stack talk to them.
-# -----------------------------------------------------------------------------
 service:
   type: ClusterIP
   ports:
@@ -66,19 +52,17 @@ service:
       port: 8889
       targetPort: 8889
       protocol: TCP
-    - name: pprof
+    - name: metrics
       port: 8888
       targetPort: 8888
       protocol: TCP
 
-# -----------------------------------------------------------------------------
 # Health-check wiring. The OTel `health_check` extension serves a single
 # path (default `/`); with `check_collector_pipeline.enabled: true` (set
 # in collectorConfig below) the same path becomes readiness — exporters
 # unreachable flip the path to 503. We use `/` for both probes; the
 # spec mentioned `/live` and `/ready`, but the extension only exposes one
 # path. Initial delay gives the OTLP receivers time to bind.
-# -----------------------------------------------------------------------------
 healthCheck:
   livenessPath: /
   readinessPath: /
@@ -87,10 +71,7 @@ healthCheck:
   timeoutSeconds: 1
   failureThreshold: 3
 
-# -----------------------------------------------------------------------------
-# OTel Collector pipeline config (the actual collector.yaml contents).
 # Keep in sync with infra/otel-collector/configmap.yaml.
-# -----------------------------------------------------------------------------
 collectorConfig: |
   receivers:
     otlp:
@@ -141,12 +122,15 @@ collectorConfig: |
         - key: service.namespace
           value: ecom
           action: upsert
-        - key: deployment.environment
-          value: dev
-          action: upsert
         - key: collector.id
           from_attribute: k8s.pod.name
           action: insert
+
+    attributes:
+      actions:
+        - key: deployment.environment
+          value: dev
+          action: upsert
 
     batch:
       timeout: 5s
@@ -169,17 +153,16 @@ collectorConfig: |
         max_elapsed_time: 60s
 
     otlphttp/loki:
-      endpoint: http://loki.observability:3100/loki/api/v1/push
+      endpoint: http://loki.observability:3100/otlp
       tls:
         insecure: true
-      encoding: json
       sending_queue:
         enabled: true
         num_consumers: 2
         queue_size: 500
 
     prometheusremotewrite:
-      endpoint: http://prometheus.observability:9090/api/v1/write
+      endpoint: http://prometheus.observability:80/api/v1/write
       tls:
         insecure: true
       resource_to_telemetry_conversion:
@@ -204,22 +187,20 @@ collectorConfig: |
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [memory_limiter, k8sattributes, resource, batch]
+        processors: [memory_limiter, k8sattributes, resource, attributes, batch]
         exporters: [otlp/tempo]
       logs:
         receivers: [otlp]
-        processors: [memory_limiter, k8sattributes, resource, batch]
+        processors: [memory_limiter, k8sattributes, resource, attributes, batch]
         exporters: [otlphttp/loki]
       metrics:
         receivers: [otlp]
-        processors: [memory_limiter, k8sattributes, resource, batch]
+        processors: [memory_limiter, k8sattributes, resource, attributes, batch]
         exporters: [prometheusremotewrite]
 
-# -----------------------------------------------------------------------------
 # Pod placement — keep the collector on control-plane-friendly nodes; the
 # memory_limiter makes per-pod memory pressure survivable, but we still want
 # to spread the 2 replicas.
-# -----------------------------------------------------------------------------
 nodeSelector: {}
 tolerations: []
 affinity:
@@ -232,9 +213,7 @@ affinity:
               app.kubernetes.io/name: otel-collector
           topologyKey: kubernetes.io/hostname
 
-# -----------------------------------------------------------------------------
 # Pod-level — termination grace > batch timeout so we flush in-flight data.
-# -----------------------------------------------------------------------------
 pod:
   terminationGracePeriodSeconds: 30
   securityContext:

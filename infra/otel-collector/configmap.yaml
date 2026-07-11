@@ -13,7 +13,6 @@ data:
   # both in sync; the top-level file is what you can `kubectl apply -f`
   # directly when you want a non-Helm deployment.
   collector.yaml: |
-    # Receivers
     receivers:
       otlp:
         protocols:
@@ -25,7 +24,6 @@ data:
             # 16 MiB cap on the HTTP body. Anything larger is rejected with 413.
             max_request_body_size: 16777216
 
-    # Processors
     processors:
       # Must be first in any pipeline: refuses new data when memory pressure
       # exceeds the spike limit, forcing the receiver to apply backpressure
@@ -68,18 +66,20 @@ data:
               key: app.kubernetes.io/part-of
               from: pod
 
-      # Static, project-wide resource attributes applied to every signal.
       resource:
         attributes:
           - key: service.namespace
             value: ecom
             action: upsert
-          - key: deployment.environment
-            value: dev
-            action: upsert
           - key: collector.id
             from_attribute: k8s.pod.name
             action: insert
+
+      attributes:
+        actions:
+          - key: deployment.environment
+            value: dev
+            action: upsert
 
       # Always last in the pipeline: batches for efficient export.
       batch:
@@ -87,9 +87,7 @@ data:
         send_batch_size: 1024
         send_batch_max_size: 2048
 
-    # Exporters
     exporters:
-      # Traces -> Tempo (OTLP gRPC)
       otlp/tempo:
         endpoint: http://tempo.observability:4317
         tls:
@@ -104,12 +102,10 @@ data:
           max_interval: 10s
           max_elapsed_time: 60s
 
-      # Logs -> Loki (OTLP HTTP push endpoint)
       otlphttp/loki:
-        endpoint: http://loki.observability:3100/loki/api/v1/push
+        endpoint: http://loki.observability:3100/otlp
         tls:
           insecure: true
-        encoding: json
         sending_queue:
           enabled: true
           num_consumers: 2
@@ -119,7 +115,7 @@ data:
       # block in 0.104.0 (rejection on a full queue); the in-memory queue
       # is implicit in the wal/rw client.
       prometheusremotewrite:
-        endpoint: http://prometheus.observability:9090/api/v1/write
+        endpoint: http://prometheus.observability:80/api/v1/write
         tls:
           insecure: true
         resource_to_telemetry_conversion:
@@ -153,13 +149,13 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, k8sattributes, resource, batch]
+          processors: [memory_limiter, k8sattributes, resource, attributes, batch]
           exporters: [otlp/tempo]
         logs:
           receivers: [otlp]
-          processors: [memory_limiter, k8sattributes, resource, batch]
+          processors: [memory_limiter, k8sattributes, resource, attributes, batch]
           exporters: [otlphttp/loki]
         metrics:
           receivers: [otlp]
-          processors: [memory_limiter, k8sattributes, resource, batch]
+          processors: [memory_limiter, k8sattributes, resource, attributes, batch]
           exporters: [prometheusremotewrite]

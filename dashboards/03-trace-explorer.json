@@ -1,0 +1,194 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Trace Explorer \u2014 search and inspect distributed traces in Tempo. Each span links to matching logs in Loki via the configured tracesToLogsV2 correlation (traceId).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Service Overview",
+      "url": "/d/service-overview",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": false
+    },
+    {
+      "title": "Log Explorer",
+      "url": "/d/log-explorer",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": false
+    },
+    {
+      "title": "SLO Status",
+      "url": "/d/slo-status",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Search",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "tempo-search",
+      "title": "Search traces",
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-observability"
+      },
+      "gridPos": {
+        "h": 24,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-observability"
+          },
+          "queryType": "search",
+          "query": "{ service.name =~ \"$service\" && status = $status }"
+        }
+      ],
+      "options": {
+        "showTraces": true,
+        "defaultCollapse": false
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "observability-platform",
+    "trace"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-observability"
+        },
+        "definition": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
+        "query": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
+        "regex": "",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0,
+        "refresh": 2,
+        "skipUrlSync": false,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "sort": 1
+      },
+      {
+        "name": "status",
+        "label": "Status",
+        "type": "custom",
+        "query": "error,ok,unset",
+        "options": [
+          {
+            "text": "error",
+            "value": "error",
+            "selected": false
+          },
+          {
+            "text": "ok",
+            "value": "ok",
+            "selected": true
+          },
+          {
+            "text": "unset",
+            "value": "unset",
+            "selected": false
+          }
+        ],
+        "current": {
+          "selected": true,
+          "text": "ok",
+          "value": "ok"
+        },
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "skipUrlSync": false,
+        "refresh": 0
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "collapse": false,
+    "enable": true,
+    "notice": false,
+    "now": true,
+    "hidden": false,
+    "nowDelay": "",
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ],
+    "status": "Stable",
+    "type": "timepicker"
+  },
+  "timezone": "",
+  "title": "Trace Explorer",
+  "uid": "trace-explorer",
+  "version": 1,
+  "weekStart": ""
+}

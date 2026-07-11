@@ -26,10 +26,10 @@ No third-party dependencies; uses the stdlib only.
 """
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
+from typing import Final
 
 try:
     import yaml
@@ -44,6 +44,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SLO_DIR = REPO_ROOT / "slo"
 RULES_DIR = REPO_ROOT / "observability" / "prometheus-rules"
 WINDOWS = ["5m", "30m", "1h", "6h", "1d", "3d", "30d"]
+
+SYNTHETIC_SERVICE_NAMES: Final[dict[str, str]] = {
+    "cart-service": "cart-service",
+    "catalog-service": "catalog-service",
+    "checkout-service": "checkout-service-checkout-service",
+    "inventory-service": "inventory-service",
+    "order-service": "order-service",
+    "payment-gateway": "payment-gateway",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +210,26 @@ def threshold(sli_objective: float, burn_factor: float) -> float:
     return 1.0 - burn_factor * (1.0 - sli_objective)
 
 
+def mwmb_alert_name(slo_metric: str) -> str:
+    family = "Latency" if slo_metric == "latency_p99" else "Availability"
+    return f"SLO{family}BurnTooFast"
+
+
+def recording_metric_selector(service: str, slo_metric: str, window: str) -> str:
+    metric = f"sli:{service}:{slo_metric}:ratio_{window}"
+    return f'{{__name__="{metric}"}}'
+
+
+def parse_latency_threshold(spec: str) -> float:
+    match = re.search(r'le="([^"]+)"', spec)
+    if match is None:
+        raise ValueError("latency SLI spec must contain a numeric le label")
+    try:
+        return float(match.group(1))
+    except ValueError as exc:
+        raise ValueError("latency SLI spec must contain a numeric le label") from exc
+
+
 # ---------------------------------------------------------------------------
 # Alert rules
 # ---------------------------------------------------------------------------
@@ -226,11 +255,11 @@ def fast_burn_alerts(slo: dict) -> list[dict]:
         th_6h = threshold(objective, burn_6h)
 
         alerts.append({
-            "alert": f"SLO{slo_metric.title().replace('_', '')}BurnTooFast",
+            "alert": mwmb_alert_name(slo_metric),
             "expr": (
-                f"sli:{service}:{slo_metric}:ratio_1h < {th_1h:.10f}\n"
+                f"{recording_metric_selector(service, slo_metric, '1h')} < {th_1h:.10f}\n"
                 f"and\n"
-                f"sli:{service}:{slo_metric}:ratio_6h < {th_6h:.10f}"
+                f"{recording_metric_selector(service, slo_metric, '6h')} < {th_6h:.10f}"
             ),
             "for": "2m",
             "labels": {
@@ -273,11 +302,11 @@ def slow_burn_alerts(slo: dict) -> list[dict]:
         th_3d = threshold(objective, burn_3d)
 
         alerts.append({
-            "alert": f"SLO{slo_metric.title().replace('_', '')}DrainingBudget",
+            "alert": mwmb_alert_name(slo_metric),
             "expr": (
-                f"sli:{service}:{slo_metric}:ratio_6h < {th_6h:.10f}\n"
+                f"{recording_metric_selector(service, slo_metric, '6h')} < {th_6h:.10f}\n"
                 f"and\n"
-                f"sli:{service}:{slo_metric}:ratio_3d < {th_3d:.10f}"
+                f"{recording_metric_selector(service, slo_metric, '3d')} < {th_3d:.10f}"
             ),
             "for": "30m",
             "labels": {
@@ -302,15 +331,19 @@ def slow_burn_alerts(slo: dict) -> list[dict]:
 def standard_alerts(slo: dict) -> list[dict]:
     """Standard (non-MWMB) health alerts per service.
 
-    - ServiceDown: up == 0 for 1m
+    - ServiceDown: synthetic health gauge == 0 for 1m
     - HighErrorRate: 5xx ratio > 5% for 5m
     - HighLatencyP99: p99 > 2x SLO threshold for 5m
     """
     service = slo["service"]
-    alerts: list[dict] = [
-        {
+    alerts: list[dict] = []
+
+    synthetic_service_name = SYNTHETIC_SERVICE_NAMES.get(service)
+    if synthetic_service_name is not None:
+        synthetic_target = f'{synthetic_service_name}([.][^:]+)?:[0-9]+'
+        alerts.append({
             "alert": "ServiceDown",
-            "expr": f'up{{service_name="{service}"}} == 0',
+            "expr": f'min(synthetic_check_success{{service=~"{synthetic_target}"}}) == 0',
             "for": "1m",
             "labels": {
                 "severity": "page",
@@ -319,12 +352,10 @@ def standard_alerts(slo: dict) -> list[dict]:
             "annotations": {
                 "summary": f"{service} is reporting as down",
                 "description": (
-                    f"Prometheus has not been able to scrape {service} for at "
-                    "least one minute."
+                    f"{service} failed synthetic health checks for at least one minute."
                 ),
             },
-        },
-    ]
+        })
 
     for slo_def in slo["slos"]:
         if slo_def["name"] in {"availability", "success_rate"}:
@@ -354,9 +385,7 @@ def standard_alerts(slo: dict) -> list[dict]:
                 },
             })
         elif slo_def["name"] == "latency_p99":
-            threshold_value = float(
-                re.search(r'le="([^"]+)"', slo_def["sli"]["spec"]).group(1)
-            )
+            threshold_value = parse_latency_threshold(slo_def["sli"]["spec"])
             warnings = 2.0 * threshold_value
             critical = 4.0 * threshold_value
             bucket_metric, bucket_labels = split_spec(slo_def["sli"]["spec"])

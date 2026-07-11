@@ -19,7 +19,10 @@
 ##   rules (Task 15/16).
 
 server:
+  fullnameOverride: prometheus
   retention: "15d"
+  extraFlags:
+    - web.enable-remote-write-receiver
   persistentVolume:
     size: 10Gi
 
@@ -33,6 +36,16 @@ server:
   ## key (matching server.configPath = /etc/config/prometheus.yml).
   configMapOverrideName: prometheus-config
 
+  extraConfigmapMounts:
+    - name: recording-rules
+      mountPath: /etc/prometheus/rules/recording
+      configMap: prom-rules-recording
+      readOnly: true
+    - name: alert-rules
+      mountPath: /etc/prometheus/rules/alerts
+      configMap: prom-rules-alerts
+      readOnly: true
+
   ## Explicitly disable anything that could forward to a remote system.
   remoteWrite: []
   remoteRead: []
@@ -40,10 +53,15 @@ server:
 ## Alertmanager subchart configuration. Mirrors infra/prometheus/alertmanager-config.yaml.
 alertmanager:
   enabled: true
+  fullnameOverride: alertmanager
   persistence:
     enabled: true
     size: 2Gi
   config:
+    global:
+      resolve_timeout: 5m
+    templates:
+      - /etc/alertmanager/*.tmpl
     route:
       receiver: incident-engine
       group_by: [alertname, service]
@@ -51,8 +69,8 @@ alertmanager:
       group_interval: 30s
       repeat_interval: 4h
       routes:
-        - match_re:
-            severity: dropped-test
+        - matchers:
+            - severity = "dropped-test"
           receiver: "null"
     receivers:
       - name: incident-engine
@@ -60,6 +78,54 @@ alertmanager:
           - url: http://incident-engine.incident.svc.cluster.local:8088/webhook
             send_resolved: true
       - name: "null"
+    inhibit_rules:
+      - source_matchers:
+          - alertname = "ServiceDown"
+        target_matchers:
+          - alertname =~ "HighErrorRate|HighLatencyP99"
+        equal:
+          - service
+  templates:
+    default.tmpl: |-
+      {{ define "default.title" -}}
+      [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }} for {{ .GroupLabels.service }}
+      {{- end }}
+
+      {{ define "default.message" -}}
+      {{ range .Alerts -}}
+      Alert: {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Labels.alertname }}{{ end }}
+      Status: {{ .Status }}
+      Severity: {{ if .Labels.severity }}{{ .Labels.severity }}{{ else }}unknown{{ end }}
+      Service: {{ if .Labels.service }}{{ .Labels.service }}{{ else }}unknown{{ end }}
+      Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+      Annotations: {{ range .Annotations.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+      Source: {{ .GeneratorURL }}
+      ---
+      {{ end }}
+      {{- end }}
+
+      {{ define "incident-engine.payload" -}}
+      {
+        "receiver": "{{ .Receiver }}",
+        "status": "{{ .Status }}",
+        "alerts": [
+          {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
+          {
+            "status": "{{ $a.Status }}",
+            "labels": { {{ range $j, $p := $a.Labels.SortedPairs }}{{ if $j }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+            "annotations": { {{ range $j, $p := $a.Annotations.SortedPairs }}{{ if $j }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+            "startsAt": "{{ $a.StartsAt }}",
+            "endsAt": "{{ $a.EndsAt }}",
+            "generatorURL": "{{ $a.GeneratorURL }}"
+          }{{ end }}
+        ],
+        "groupLabels": { {{ range $i, $p := .GroupLabels.SortedPairs }}{{ if $i }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+        "commonLabels": { {{ range $i, $p := .CommonLabels.SortedPairs }}{{ if $i }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+        "commonAnnotations": { {{ range $i, $p := .CommonAnnotations.SortedPairs }}{{ if $i }},{{ end }}"{{ $p.Name }}": "{{ $p.Value }}"{{ end }} },
+        "externalURL": "{{ .ExternalURL }}",
+        "version": "{{ .Version }}"
+      }
+      {{- end }}
 
 ## kube-state-metrics subchart — provides pod/deployment/statefulset metrics
 ## referenced by Task 15 SLO recoding rules and Task 16 alert rules.

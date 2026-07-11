@@ -94,6 +94,7 @@ resource "null_resource" "k3d_cluster" {
           --image ${var.k3s_image} \
           --servers ${var.servers} \
           --agents ${var.agents} \
+          --k3s-arg "--disable=traefik@server:*" \
           --servers-memory ${var.server_memory} \
           --agents-memory ${var.agent_memory} \
           ${join(" ", local.port_args)} \

@@ -10,10 +10,6 @@ tempo:
   # 7-day trace retention (168h). This is fed into compactor.compaction.block_retention.
   retention: 168h
 
-  # No query duration limit for demo exploration.
-  querier:
-    max_query_duration: 0
-
   # Local filesystem trace storage. The chart mounts a single PVC at /var/tempo,
   # so /var/tempo/traces and /var/tempo/wal live on the same persistent volume.
   storage:

@@ -2,7 +2,6 @@
 # Chart: grafana/loki
 # Deployment mode: SingleBinary (not microservices or simple-scalable).
 # Storage: filesystem on a 10Gi PVC mounted at /loki.
-# Schema: v13 with boltdb-shipper index store.
 # Retention: 7 days (168h).
 # Auth: disabled (cluster-internal use only).
 
@@ -28,7 +27,7 @@ loki:
   schemaConfig:
     configs:
       - from: "2024-01-01"
-        store: boltdb-shipper
+        store: tsdb
         object_store: filesystem
         schema: v13
         index:
@@ -42,15 +41,11 @@ loki:
     reject_old_samples: true
     reject_old_samples_max_age: 168h
 
-  # Override/add boltdb-shipper index settings for filesystem storage.
-  # The chart's default storage_config only wires up the index-gateway client,
-  # which is not used in single-binary filesystem mode.
   structuredConfig:
     storage_config:
-      boltdb_shipper:
-        active_index_directory: /loki/boltdb-shipper-active
-        cache_location: /loki/boltdb-shipper-cache
-        shared_store: filesystem
+      tsdb_shipper:
+        active_index_directory: /loki/tsdb-index
+        cache_location: /loki/tsdb-cache
       filesystem:
         directory: /loki/chunks
 

@@ -7,9 +7,8 @@ The script:
 
   1. Loads the SLO YAMLs under ``slo/*.yaml`` to recover the per-service
      SLO objective (e.g. 0.999 availability, 0.99 latency p99).
-  2. Loads the rule files and parses every ``SLO*BurnTooFast`` and
-     ``SLO*DrainingBudget`` alert expression to extract the SLI threshold
-     for each (window, slo_kind) pair.
+  2. Loads the rule files and parses every ``SLO*BurnTooFast`` alert
+     expression to extract the SLI threshold for each (window, slo_kind) pair.
   3. Recomputes the expected MWMB thresholds:
 
        - Page-tier: 1h short / 6h long, burn-rate factors 14.4x and 6x.
@@ -36,7 +35,7 @@ from pathlib import Path
 
 try:
     import yaml
-except ImportError as exc:  # pragma: no cover
+except ImportError:  # pragma: no cover
     print("PyYAML required (install via `pip install pyyaml`)", file=sys.stderr)
     raise
 
@@ -50,7 +49,8 @@ TICKET_FACTORS = {"6h": 6.0, "3d": 1.0}
 ABS_TOL = 1e-6
 
 THRESHOLD_RE = re.compile(
-    r"sli:([a-zA-Z0-9_-]+):([a-zA-Z0-9_]+):ratio_(1h|6h|3d)\s*<\s*([0-9.]+)"
+    r'\{__name__="sli:([a-zA-Z0-9_-]+):([a-zA-Z0-9_]+):ratio_(1h|6h|3d)"\}'
+    r"\s*<\s*([0-9.]+)"
 )
 
 
@@ -114,7 +114,7 @@ def main() -> int:
         if severity == "page" and "BurnTooFast" in alert:
             factors = PAGE_FACTORS
             expected_windows = {"1h", "6h"}
-        elif severity == "warning" and "DrainingBudget" in alert:
+        elif severity == "warning" and "BurnTooFast" in alert:
             factors = TICKET_FACTORS
             expected_windows = {"6h", "3d"}
         else:

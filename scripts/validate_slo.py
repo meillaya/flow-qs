@@ -108,7 +108,9 @@ def _validate_file(path: Path) -> list[str]:
 
         window = slo.get("window")
         window_seconds: int | None = None
-        if window is not None:
+        if "window" in slo and not isinstance(window, str):
+            errors.append(_error(path, f"{prefix}.window must be a string"))
+        elif isinstance(window, str):
             try:
                 window_seconds = _parse_window(window)
             except ValueError as exc:
@@ -116,7 +118,9 @@ def _validate_file(path: Path) -> list[str]:
 
         error_budget = slo.get("error_budget")
         budget_seconds: int | None = None
-        if error_budget is not None:
+        if "error_budget" in slo and not isinstance(error_budget, str):
+            errors.append(_error(path, f"{prefix}.error_budget must be a string"))
+        elif isinstance(error_budget, str):
             try:
                 budget_seconds = _parse_budget(error_budget)
             except ValueError as exc:

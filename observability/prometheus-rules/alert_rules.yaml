@@ -4,9 +4,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:cart-service:availability:ratio_1h < 0.9856000000
+          {__name__="sli:cart-service:availability:ratio_1h"} < 0.9856000000
           and
-          sli:cart-service:availability:ratio_6h < 0.9940000000
+          {__name__="sli:cart-service:availability:ratio_6h"} < 0.9940000000
         for: 2m
         labels:
           severity: "page"
@@ -18,11 +18,11 @@ groups:
           summary: "cart-service SLO availability burn rate is unsustainable"
           description: "cart-service availability SLO (0.9990) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:cart-service:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:cart-service:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:cart-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:cart-service:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -34,11 +34,11 @@ groups:
           summary: "cart-service SLO latency_p99 burn rate is unsustainable"
           description: "cart-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:cart-service:availability:ratio_6h < 0.9940000000
+          {__name__="sli:cart-service:availability:ratio_6h"} < 0.9940000000
           and
-          sli:cart-service:availability:ratio_3d < 0.9990000000
+          {__name__="sli:cart-service:availability:ratio_3d"} < 0.9990000000
         for: 30m
         labels:
           severity: "warning"
@@ -50,11 +50,11 @@ groups:
           summary: "cart-service SLO availability budget is draining steadily"
           description: "cart-service availability SLO (0.9990) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:cart-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:cart-service:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:cart-service:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:cart-service:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -68,14 +68,14 @@ groups:
           runbook: "https://sre.google/workbook/alerting-on-slos/"
       - alert: ServiceDown
         expr: |
-          up{service_name="cart-service"} == 0
+          min(synthetic_check_success{service=~"cart-service([.][^:]+)?:[0-9]+"}) == 0
         for: 1m
         labels:
           severity: "page"
           service: "cart-service"
         annotations:
           summary: "cart-service is reporting as down"
-          description: "Prometheus has not been able to scrape cart-service for at least one minute."
+          description: "cart-service failed synthetic health checks for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
@@ -109,9 +109,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:catalog-service:availability:ratio_1h < 0.9928000000
+          {__name__="sli:catalog-service:availability:ratio_1h"} < 0.9928000000
           and
-          sli:catalog-service:availability:ratio_6h < 0.9970000000
+          {__name__="sli:catalog-service:availability:ratio_6h"} < 0.9970000000
         for: 2m
         labels:
           severity: "page"
@@ -123,11 +123,11 @@ groups:
           summary: "catalog-service SLO availability burn rate is unsustainable"
           description: "catalog-service availability SLO (0.9995) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:catalog-service:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:catalog-service:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:catalog-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:catalog-service:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -139,11 +139,11 @@ groups:
           summary: "catalog-service SLO latency_p99 burn rate is unsustainable"
           description: "catalog-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:catalog-service:availability:ratio_6h < 0.9970000000
+          {__name__="sli:catalog-service:availability:ratio_6h"} < 0.9970000000
           and
-          sli:catalog-service:availability:ratio_3d < 0.9995000000
+          {__name__="sli:catalog-service:availability:ratio_3d"} < 0.9995000000
         for: 30m
         labels:
           severity: "warning"
@@ -155,11 +155,11 @@ groups:
           summary: "catalog-service SLO availability budget is draining steadily"
           description: "catalog-service availability SLO (0.9995) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:catalog-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:catalog-service:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:catalog-service:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:catalog-service:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -173,14 +173,14 @@ groups:
           runbook: "https://sre.google/workbook/alerting-on-slos/"
       - alert: ServiceDown
         expr: |
-          up{service_name="catalog-service"} == 0
+          min(synthetic_check_success{service=~"catalog-service([.][^:]+)?:[0-9]+"}) == 0
         for: 1m
         labels:
           severity: "page"
           service: "catalog-service"
         annotations:
           summary: "catalog-service is reporting as down"
-          description: "Prometheus has not been able to scrape catalog-service for at least one minute."
+          description: "catalog-service failed synthetic health checks for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
@@ -214,9 +214,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:checkout-service:availability:ratio_1h < 0.9856000000
+          {__name__="sli:checkout-service:availability:ratio_1h"} < 0.9856000000
           and
-          sli:checkout-service:availability:ratio_6h < 0.9940000000
+          {__name__="sli:checkout-service:availability:ratio_6h"} < 0.9940000000
         for: 2m
         labels:
           severity: "page"
@@ -228,11 +228,11 @@ groups:
           summary: "checkout-service SLO availability burn rate is unsustainable"
           description: "checkout-service availability SLO (0.9990) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:checkout-service:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:checkout-service:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:checkout-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:checkout-service:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -244,11 +244,11 @@ groups:
           summary: "checkout-service SLO latency_p99 burn rate is unsustainable"
           description: "checkout-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:checkout-service:availability:ratio_6h < 0.9940000000
+          {__name__="sli:checkout-service:availability:ratio_6h"} < 0.9940000000
           and
-          sli:checkout-service:availability:ratio_3d < 0.9990000000
+          {__name__="sli:checkout-service:availability:ratio_3d"} < 0.9990000000
         for: 30m
         labels:
           severity: "warning"
@@ -260,11 +260,11 @@ groups:
           summary: "checkout-service SLO availability budget is draining steadily"
           description: "checkout-service availability SLO (0.9990) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:checkout-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:checkout-service:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:checkout-service:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:checkout-service:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -278,14 +278,14 @@ groups:
           runbook: "https://sre.google/workbook/alerting-on-slos/"
       - alert: ServiceDown
         expr: |
-          up{service_name="checkout-service"} == 0
+          min(synthetic_check_success{service=~"checkout-service-checkout-service([.][^:]+)?:[0-9]+"}) == 0
         for: 1m
         labels:
           severity: "page"
           service: "checkout-service"
         annotations:
           summary: "checkout-service is reporting as down"
-          description: "Prometheus has not been able to scrape checkout-service for at least one minute."
+          description: "checkout-service failed synthetic health checks for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
@@ -319,9 +319,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:end-to-end-checkout:availability:ratio_1h < 0.8560000000
+          {__name__="sli:end-to-end-checkout:availability:ratio_1h"} < 0.8560000000
           and
-          sli:end-to-end-checkout:availability:ratio_6h < 0.9400000000
+          {__name__="sli:end-to-end-checkout:availability:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -333,11 +333,11 @@ groups:
           summary: "end-to-end-checkout SLO availability burn rate is unsustainable"
           description: "end-to-end-checkout availability SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:end-to-end-checkout:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:end-to-end-checkout:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:end-to-end-checkout:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:end-to-end-checkout:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -349,11 +349,11 @@ groups:
           summary: "end-to-end-checkout SLO latency_p99 burn rate is unsustainable"
           description: "end-to-end-checkout latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:end-to-end-checkout:availability:ratio_6h < 0.9400000000
+          {__name__="sli:end-to-end-checkout:availability:ratio_6h"} < 0.9400000000
           and
-          sli:end-to-end-checkout:availability:ratio_3d < 0.9900000000
+          {__name__="sli:end-to-end-checkout:availability:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -365,11 +365,11 @@ groups:
           summary: "end-to-end-checkout SLO availability budget is draining steadily"
           description: "end-to-end-checkout availability SLO (0.9900) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:end-to-end-checkout:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:end-to-end-checkout:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:end-to-end-checkout:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:end-to-end-checkout:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -381,16 +381,6 @@ groups:
           summary: "end-to-end-checkout SLO latency_p99 budget is draining steadily"
           description: "end-to-end-checkout latency_p99 SLO (0.9900) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: ServiceDown
-        expr: |
-          up{service_name="end-to-end-checkout"} == 0
-        for: 1m
-        labels:
-          severity: "page"
-          service: "end-to-end-checkout"
-        annotations:
-          summary: "end-to-end-checkout is reporting as down"
-          description: "Prometheus has not been able to scrape end-to-end-checkout for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
@@ -424,9 +414,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:inventory-service:availability:ratio_1h < 0.9928000000
+          {__name__="sli:inventory-service:availability:ratio_1h"} < 0.9928000000
           and
-          sli:inventory-service:availability:ratio_6h < 0.9970000000
+          {__name__="sli:inventory-service:availability:ratio_6h"} < 0.9970000000
         for: 2m
         labels:
           severity: "page"
@@ -438,11 +428,11 @@ groups:
           summary: "inventory-service SLO availability burn rate is unsustainable"
           description: "inventory-service availability SLO (0.9995) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:inventory-service:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:inventory-service:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:inventory-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:inventory-service:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -454,11 +444,11 @@ groups:
           summary: "inventory-service SLO latency_p99 burn rate is unsustainable"
           description: "inventory-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:inventory-service:availability:ratio_6h < 0.9970000000
+          {__name__="sli:inventory-service:availability:ratio_6h"} < 0.9970000000
           and
-          sli:inventory-service:availability:ratio_3d < 0.9995000000
+          {__name__="sli:inventory-service:availability:ratio_3d"} < 0.9995000000
         for: 30m
         labels:
           severity: "warning"
@@ -470,11 +460,11 @@ groups:
           summary: "inventory-service SLO availability budget is draining steadily"
           description: "inventory-service availability SLO (0.9995) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:inventory-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:inventory-service:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:inventory-service:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:inventory-service:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -488,14 +478,14 @@ groups:
           runbook: "https://sre.google/workbook/alerting-on-slos/"
       - alert: ServiceDown
         expr: |
-          up{service_name="inventory-service"} == 0
+          min(synthetic_check_success{service=~"inventory-service([.][^:]+)?:[0-9]+"}) == 0
         for: 1m
         labels:
           severity: "page"
           service: "inventory-service"
         annotations:
           summary: "inventory-service is reporting as down"
-          description: "Prometheus has not been able to scrape inventory-service for at least one minute."
+          description: "inventory-service failed synthetic health checks for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
@@ -529,9 +519,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:order-service:availability:ratio_1h < 0.9856000000
+          {__name__="sli:order-service:availability:ratio_1h"} < 0.9856000000
           and
-          sli:order-service:availability:ratio_6h < 0.9940000000
+          {__name__="sli:order-service:availability:ratio_6h"} < 0.9940000000
         for: 2m
         labels:
           severity: "page"
@@ -543,11 +533,11 @@ groups:
           summary: "order-service SLO availability burn rate is unsustainable"
           description: "order-service availability SLO (0.9990) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:order-service:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:order-service:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:order-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:order-service:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -559,11 +549,11 @@ groups:
           summary: "order-service SLO latency_p99 burn rate is unsustainable"
           description: "order-service latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:order-service:availability:ratio_6h < 0.9940000000
+          {__name__="sli:order-service:availability:ratio_6h"} < 0.9940000000
           and
-          sli:order-service:availability:ratio_3d < 0.9990000000
+          {__name__="sli:order-service:availability:ratio_3d"} < 0.9990000000
         for: 30m
         labels:
           severity: "warning"
@@ -575,11 +565,11 @@ groups:
           summary: "order-service SLO availability budget is draining steadily"
           description: "order-service availability SLO (0.9990) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:order-service:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:order-service:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:order-service:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:order-service:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -593,14 +583,14 @@ groups:
           runbook: "https://sre.google/workbook/alerting-on-slos/"
       - alert: ServiceDown
         expr: |
-          up{service_name="order-service"} == 0
+          min(synthetic_check_success{service=~"order-service([.][^:]+)?:[0-9]+"}) == 0
         for: 1m
         labels:
           severity: "page"
           service: "order-service"
         annotations:
           summary: "order-service is reporting as down"
-          description: "Prometheus has not been able to scrape order-service for at least one minute."
+          description: "order-service failed synthetic health checks for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
@@ -634,9 +624,9 @@ groups:
     rules:
       - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:payment-gateway:availability:ratio_1h < 0.9280000000
+          {__name__="sli:payment-gateway:availability:ratio_1h"} < 0.9280000000
           and
-          sli:payment-gateway:availability:ratio_6h < 0.9700000000
+          {__name__="sli:payment-gateway:availability:ratio_6h"} < 0.9700000000
         for: 2m
         labels:
           severity: "page"
@@ -648,11 +638,11 @@ groups:
           summary: "payment-gateway SLO availability burn rate is unsustainable"
           description: "payment-gateway availability SLO (0.9950) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99BurnTooFast
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:payment-gateway:latency_p99:ratio_1h < 0.8560000000
+          {__name__="sli:payment-gateway:latency_p99:ratio_1h"} < 0.8560000000
           and
-          sli:payment-gateway:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:payment-gateway:latency_p99:ratio_6h"} < 0.9400000000
         for: 2m
         labels:
           severity: "page"
@@ -664,11 +654,11 @@ groups:
           summary: "payment-gateway SLO latency_p99 burn rate is unsustainable"
           description: "payment-gateway latency_p99 SLO (0.9900) is being consumed at >=14.4x (1h) and >=6x (6h) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOAvailabilityDrainingBudget
+      - alert: SLOAvailabilityBurnTooFast
         expr: |
-          sli:payment-gateway:availability:ratio_6h < 0.9700000000
+          {__name__="sli:payment-gateway:availability:ratio_6h"} < 0.9700000000
           and
-          sli:payment-gateway:availability:ratio_3d < 0.9950000000
+          {__name__="sli:payment-gateway:availability:ratio_3d"} < 0.9950000000
         for: 30m
         labels:
           severity: "warning"
@@ -680,11 +670,11 @@ groups:
           summary: "payment-gateway SLO availability budget is draining steadily"
           description: "payment-gateway availability SLO (0.9950) is being consumed at >=6x (6h) and >=1x (3d) the normal rate."
           runbook: "https://sre.google/workbook/alerting-on-slos/"
-      - alert: SLOLatencyP99DrainingBudget
+      - alert: SLOLatencyBurnTooFast
         expr: |
-          sli:payment-gateway:latency_p99:ratio_6h < 0.9400000000
+          {__name__="sli:payment-gateway:latency_p99:ratio_6h"} < 0.9400000000
           and
-          sli:payment-gateway:latency_p99:ratio_3d < 0.9900000000
+          {__name__="sli:payment-gateway:latency_p99:ratio_3d"} < 0.9900000000
         for: 30m
         labels:
           severity: "warning"
@@ -698,14 +688,14 @@ groups:
           runbook: "https://sre.google/workbook/alerting-on-slos/"
       - alert: ServiceDown
         expr: |
-          up{service_name="payment-gateway"} == 0
+          min(synthetic_check_success{service=~"payment-gateway([.][^:]+)?:[0-9]+"}) == 0
         for: 1m
         labels:
           severity: "page"
           service: "payment-gateway"
         annotations:
           summary: "payment-gateway is reporting as down"
-          description: "Prometheus has not been able to scrape payment-gateway for at least one minute."
+          description: "payment-gateway failed synthetic health checks for at least one minute."
       - alert: HighErrorRate
         expr: |
           (
