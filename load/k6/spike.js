@@ -1,15 +1,12 @@
-/**
- * k6 spike test: sudden burst from low baseline to very high VUs.
- *
- * Profile: 10 VUs baseline, instant spike to 500 VUs for 30s, then back to baseline.
- * Flow: lightweight health checks to survive the burst without saturating pods.
- * Success criteria: HTTP error rate < 10% during the spike.
- */
-
 const http = require("k6/http");
 const { check, sleep } = require("k6");
+const { Rate } = require("k6/metrics");
 
 const NS = __ENV.SERVICE_NAMESPACE || "ecom";
+const CART_URL = __ENV.CART_URL || `http://cart-service.${NS}:8002`;
+const CHECKOUT_URL = __ENV.CHECKOUT_URL ||
+  `http://checkout-service-checkout-service.${NS}:8003`;
+const checkoutSuccessRate = new Rate("checkout_success_rate");
 
 exports.options = {
   stages: [
@@ -19,7 +16,9 @@ exports.options = {
     { duration: "10s", target: 10 },
   ],
   thresholds: {
+    http_req_duration: ["p(95)<2000"],
     http_req_failed: ["rate<0.10"],
+    checkout_success_rate: ["rate>0.90"],
   },
 };
 
@@ -40,6 +39,36 @@ exports.default = function () {
   check(res, {
     "health status is 200": (r) => r.status === 200,
   });
+
+  if (Math.random() < 0.005) {
+    const userId = `spike-${__VU}-${Date.now()}`;
+    const cartRes = http.post(
+      `${CART_URL}/cart/${userId}/items`,
+      JSON.stringify({
+        sku: `SKU-${String((__ITER + __VU) % 20 + 1).padStart(3, "0")}`,
+        qty: 1,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        tags: { step: "add_to_cart" },
+      },
+    );
+    const checkoutRes = cartRes.status === 200
+      ? http.post(
+        `${CHECKOUT_URL}/checkout`,
+        JSON.stringify({ user_id: userId, payment_method: "card" }),
+        {
+          headers: { "Content-Type": "application/json" },
+          tags: { step: "checkout" },
+        },
+      )
+      : null;
+    const checkoutOk = checkoutRes !== null &&
+      checkoutRes.status === 200 &&
+      checkoutRes.json("status") === "paid";
+    checkoutSuccessRate.add(checkoutOk);
+    check(checkoutRes, { "spike checkout succeeds": () => checkoutOk });
+  }
 
   sleep(0.1);
 };

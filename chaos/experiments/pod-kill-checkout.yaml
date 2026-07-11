@@ -1,16 +1,25 @@
+---
 apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
+kind: Workflow
 metadata:
   name: pod-kill-checkout
   namespace: chaos-testing
 spec:
-  action: container-kill
-  mode: one
-  duration: 5m
-  containerNames:
-    - checkout-service
-  selector:
-    namespaces:
-      - ecom
-    labelSelectors:
-      app.kubernetes.io/name: checkout-service
+  entry: scheduled-pod-kill
+  templates:
+    - name: scheduled-pod-kill
+      templateType: Schedule
+      deadline: 5m
+      schedule:
+        schedule: "@every 60s"
+        historyLimit: 5
+        concurrencyPolicy: Forbid
+        type: PodChaos
+        podChaos:
+          action: pod-kill
+          mode: one
+          selector:
+            namespaces:
+              - ecom
+            labelSelectors:
+              app.kubernetes.io/name: checkout-service

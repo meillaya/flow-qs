@@ -1,19 +1,32 @@
+---
 apiVersion: chaos-mesh.org/v1alpha1
-kind: NetworkChaos
+kind: Schedule
 metadata:
   name: network-delay-payment
   namespace: chaos-testing
 spec:
-  action: delay
-  mode: all
-  selector:
-    namespaces:
-      - ecom
-  delay:
-    latency: 2000ms
-    correlation: "100"
-    jitter: 0ms
-  externalTargets:
-    - "payment-gateway.ecom.svc.cluster.local"
-  direction: to
-  duration: 5m
+  schedule: "@every 60s"
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  type: NetworkChaos
+  networkChaos:
+    action: delay
+    mode: all
+    selector:
+      namespaces:
+        - ecom
+      labelSelectors:
+        app.kubernetes.io/name: checkout-service
+    delay:
+      latency: 2000ms
+      correlation: "100"
+      jitter: 0ms
+    direction: from
+    target:
+      mode: all
+      selector:
+        namespaces:
+          - ecom
+        labelSelectors:
+          app.kubernetes.io/name: payment-gateway
+    duration: 5m

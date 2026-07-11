@@ -1,18 +1,24 @@
+---
 apiVersion: chaos-mesh.org/v1alpha1
-kind: StressChaos
+kind: Schedule
 metadata:
   name: cpu-stress-catalog
   namespace: chaos-testing
 spec:
-  mode: fixed
-  value: "1"
-  selector:
-    namespaces:
-      - ecom
-    labelSelectors:
-      app.kubernetes.io/name: catalog-service
-  stressors:
-    cpu:
-      workers: 1
-      load: 80
-  duration: 3m
+  schedule: "@every 60s"
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  type: StressChaos
+  stressChaos:
+    mode: fixed
+    value: "1"
+    selector:
+      namespaces:
+        - ecom
+      labelSelectors:
+        app.kubernetes.io/name: catalog-service
+    stressors:
+      cpu:
+        workers: 1
+        load: 80
+    duration: 3m

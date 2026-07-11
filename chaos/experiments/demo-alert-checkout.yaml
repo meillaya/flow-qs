@@ -1,0 +1,23 @@
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: demo-alert-checkout
+  namespace: chaos-testing
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - ecom
+    labelSelectors:
+      app.kubernetes.io/name: checkout-service
+  direction: from
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - ecom
+      labelSelectors:
+        app.kubernetes.io/name: synthetic-monitor
+  duration: 3m

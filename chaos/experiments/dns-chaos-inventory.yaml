@@ -1,17 +1,23 @@
+---
 apiVersion: chaos-mesh.org/v1alpha1
-kind: DNSChaos
+kind: Schedule
 metadata:
   name: dns-chaos-inventory
   namespace: chaos-testing
 spec:
-  action: random
-  mode: all
-  selector:
-    namespaces:
-      - ecom
-    labelSelectors:
-      app.kubernetes.io/name: inventory-service
-  patterns:
-    - "inventory-service.ecom.svc.cluster.local"
-    - "*.inventory-service.ecom.svc.cluster.local"
-  duration: 2m
+  schedule: "@every 60s"
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  type: DNSChaos
+  dnsChaos:
+    action: random
+    mode: all
+    selector:
+      namespaces:
+        - ecom
+      labelSelectors:
+        app.kubernetes.io/name: inventory-service
+    patterns:
+      - "inventory-service.ecom.svc.cluster.local"
+      - "*.inventory-service.ecom.svc.cluster.local"
+    duration: 2m

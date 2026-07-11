@@ -1,22 +1,35 @@
-/**
- * k6 smoke test: minimal health-check validation for every service.
- *
- * Profile: 1 VU for 30 seconds, one iteration per service health endpoint.
- * Success criteria: every /healthz returns HTTP 200.
- */
-
 const http = require("k6/http");
 const { check, sleep } = require("k6");
+const { Rate } = require("k6/metrics");
 
 const NS = __ENV.SERVICE_NAMESPACE || "ecom";
+const CART_URL = __ENV.CART_URL || `http://cart-service.${NS}:8002`;
+const CHECKOUT_URL = __ENV.CHECKOUT_URL ||
+  `http://checkout-service-checkout-service.${NS}:8003`;
+const checkoutSuccessRate = new Rate("checkout_success_rate");
 
 const SERVICES = [
-  { name: "catalog-service", url: `http://catalog-service.${NS}:8000/healthz` },
-  { name: "inventory-service", url: `http://inventory-service.${NS}:8001/healthz` },
+  {
+    name: "catalog-service",
+    url: `http://catalog-service.${NS}:8000/healthz`,
+  },
+  {
+    name: "inventory-service",
+    url: `http://inventory-service.${NS}:8001/healthz`,
+  },
   { name: "cart-service", url: `http://cart-service.${NS}:8002/healthz` },
-  { name: "checkout-service", url: `http://checkout-service-checkout-service.${NS}:8003/healthz` },
-  { name: "order-service", url: `http://order-service.${NS}:8004/healthz` },
-  { name: "payment-gateway", url: `http://payment-gateway.${NS}:8005/healthz` },
+  {
+    name: "checkout-service",
+    url: `http://checkout-service-checkout-service.${NS}:8003/healthz`,
+  },
+  {
+    name: "order-service",
+    url: `http://order-service.${NS}:8004/healthz`,
+  },
+  {
+    name: "payment-gateway",
+    url: `http://payment-gateway.${NS}:8005/healthz`,
+  },
 ];
 
 exports.options = {
@@ -26,6 +39,7 @@ exports.options = {
     http_req_duration: ["p(95)<100"],
     http_req_failed: ["rate<0.01"],
     checks: ["rate==1"],
+    checkout_success_rate: ["rate>0.99"],
   },
 };
 
@@ -38,5 +52,33 @@ exports.default = function () {
         r.status === 200 && /healthy|ok/.test(r.body),
     });
   }
+
+  const userId = `smoke-${__VU}-${Date.now()}`;
+  const cartRes = http.post(
+    `${CART_URL}/cart/${userId}/items`,
+    JSON.stringify({
+      sku: `SKU-${String(__ITER % 20 + 1).padStart(3, "0")}`,
+      qty: 1,
+    }),
+    {
+      headers: { "Content-Type": "application/json" },
+      tags: { step: "add_to_cart" },
+    },
+  );
+  const checkoutRes = cartRes.status === 200
+    ? http.post(
+      `${CHECKOUT_URL}/checkout`,
+      JSON.stringify({ user_id: userId, payment_method: "card" }),
+      {
+        headers: { "Content-Type": "application/json" },
+        tags: { step: "checkout" },
+      },
+    )
+    : null;
+  const checkoutOk = checkoutRes !== null &&
+    checkoutRes.status === 200 &&
+    checkoutRes.json("status") === "paid";
+  checkoutSuccessRate.add(checkoutOk);
+  check(checkoutRes, { "smoke checkout succeeds": () => checkoutOk });
   sleep(1);
 };

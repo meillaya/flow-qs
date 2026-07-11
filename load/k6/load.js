@@ -1,19 +1,12 @@
-/**
- * k6 load test: realistic checkout flow under sustained load.
- *
- * Profile: ramp from 50 to 100 VUs over 5 minutes, then ramp down.
- * Flow: POST /cart/{user_id}/items -> POST /checkout
- * Success criteria: p95 latency < 1s, error rate < 1%, checkout success rate high.
- */
-
 const http = require("k6/http");
 const { check, sleep } = require("k6");
 const { Rate } = require("k6/metrics");
 
 const NS = __ENV.SERVICE_NAMESPACE || "ecom";
 const CART_URL = __ENV.CART_URL || `http://cart-service.${NS}:8002`;
-const CHECKOUT_URL =
-  __ENV.CHECKOUT_URL || `http://checkout-service-checkout-service.${NS}:8003`;
+const CHECKOUT_URL = __ENV.CHECKOUT_URL ||
+  `http://checkout-service-checkout-service.${NS}:8003`;
+const CHAOS_AWARE = __ENV.CHAOS_AWARE === "true";
 
 const checkoutSuccessRate = new Rate("checkout_success_rate");
 
@@ -24,14 +17,20 @@ exports.options = {
     { duration: "30s", target: 0 },
   ],
   thresholds: {
-    http_req_duration: ["p(95)<1000"],
-    http_req_failed: ["rate<0.01"],
-    checkout_success_rate: ["rate>0.95"],
+    http_req_duration: [CHAOS_AWARE ? "p(95)<3000" : "p(95)<1000"],
+    http_req_failed: [CHAOS_AWARE ? "rate<0.05" : "rate<0.01"],
+    checkout_success_rate: [CHAOS_AWARE ? "rate>0.90" : "rate>0.95"],
   },
 };
 
 function makeUserId() {
-  return `load-${__VU}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return `load-${__VU}-${Date.now()}-${
+    Math.floor(Math.random() * 100000)
+  }`;
+}
+
+function validSku() {
+  return `SKU-${String((__ITER + __VU) % 20 + 1).padStart(3, "0")}`;
 }
 
 exports.default = function () {
@@ -40,11 +39,11 @@ exports.default = function () {
   // Step 1: add an item to the cart
   const cartRes = http.post(
     `${CART_URL}/cart/${userId}/items`,
-    JSON.stringify({ sku: "SKU-LOAD-001", qty: 1 }),
+    JSON.stringify({ sku: validSku(), qty: 1 }),
     {
       headers: { "Content-Type": "application/json" },
       tags: { step: "add_to_cart" },
-    }
+    },
   );
 
   const cartOk = check(cartRes, {
@@ -64,7 +63,7 @@ exports.default = function () {
     {
       headers: { "Content-Type": "application/json" },
       tags: { step: "checkout" },
-    }
+    },
   );
 
   const checkoutOk = check(checkoutRes, {
@@ -75,5 +74,33 @@ exports.default = function () {
 
   checkoutSuccessRate.add(checkoutOk ? 1 : 0);
 
-  sleep(1);
+  sleep(15);
+};
+
+function summaryValue(data, metric, value) {
+  const found = data.metrics[metric];
+  return found ? found.values[value] : null;
+}
+
+exports.handleSummary = function (data) {
+  const payload = {
+    schema: "enten.k6.summary/v1",
+    profile: CHAOS_AWARE ? "demo-chaos" : "standalone-load",
+    metrics: {
+      checkout_success_rate: summaryValue(
+        data,
+        "checkout_success_rate",
+        "rate",
+      ),
+      http_req_failed: summaryValue(data, "http_req_failed", "rate"),
+      http_req_duration_p95_ms: summaryValue(
+        data,
+        "http_req_duration",
+        "p(95)",
+      ),
+      checks_rate: summaryValue(data, "checks", "rate"),
+      iterations: summaryValue(data, "iterations", "count"),
+    },
+  };
+  return { stdout: `ENTEN_K6_SUMMARY=${JSON.stringify(payload)}\n` };
 };

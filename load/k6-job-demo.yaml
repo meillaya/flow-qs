@@ -1,0 +1,148 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-load-script
+  namespace: load
+data:
+  load.js: |
+      const http = require("k6/http");
+      const { check, sleep } = require("k6");
+      const { Rate } = require("k6/metrics");
+
+      const NS = __ENV.SERVICE_NAMESPACE || "ecom";
+      const CART_URL = __ENV.CART_URL || `http://cart-service.${NS}:8002`;
+      const CHECKOUT_URL = __ENV.CHECKOUT_URL ||
+        `http://checkout-service-checkout-service.${NS}:8003`;
+      const CHAOS_AWARE = __ENV.CHAOS_AWARE === "true";
+
+      const checkoutSuccessRate = new Rate("checkout_success_rate");
+
+      exports.options = {
+        stages: [
+          { duration: "2m", target: 50 },
+          { duration: "3m", target: 100 },
+          { duration: "30s", target: 0 },
+        ],
+        thresholds: {
+          http_req_duration: [CHAOS_AWARE ? "p(95)<3000" : "p(95)<1000"],
+          http_req_failed: [CHAOS_AWARE ? "rate<0.05" : "rate<0.01"],
+          checkout_success_rate: [CHAOS_AWARE ? "rate>0.90" : "rate>0.95"],
+        },
+      };
+
+      function makeUserId() {
+        return `load-${__VU}-${Date.now()}-${
+          Math.floor(Math.random() * 100000)
+        }`;
+      }
+
+      function validSku() {
+        return `SKU-${String((__ITER + __VU) % 20 + 1).padStart(3, "0")}`;
+      }
+
+      exports.default = function () {
+        const userId = makeUserId();
+
+        // Step 1: add an item to the cart
+        const cartRes = http.post(
+          `${CART_URL}/cart/${userId}/items`,
+          JSON.stringify({ sku: validSku(), qty: 1 }),
+          {
+            headers: { "Content-Type": "application/json" },
+            tags: { step: "add_to_cart" },
+          },
+        );
+
+        const cartOk = check(cartRes, {
+          "cart add status is 200": (r) => r.status === 200,
+        });
+
+        if (!cartOk) {
+          checkoutSuccessRate.add(0);
+          sleep(1);
+          return;
+        }
+
+        // Step 2: checkout
+        const checkoutRes = http.post(
+          `${CHECKOUT_URL}/checkout`,
+          JSON.stringify({ user_id: userId, payment_method: "card" }),
+          {
+            headers: { "Content-Type": "application/json" },
+            tags: { step: "checkout" },
+          },
+        );
+
+        const checkoutOk = check(checkoutRes, {
+          "checkout status is 200": (r) => r.status === 200,
+          "checkout returned paid status": (r) =>
+            r.status === 200 && r.json("status") === "paid",
+        });
+
+        checkoutSuccessRate.add(checkoutOk ? 1 : 0);
+
+        sleep(15);
+      };
+
+      function summaryValue(data, metric, value) {
+        const found = data.metrics[metric];
+        return found ? found.values[value] : null;
+      }
+
+      exports.handleSummary = function (data) {
+        const payload = {
+          schema: "enten.k6.summary/v1",
+          profile: CHAOS_AWARE ? "demo-chaos" : "standalone-load",
+          metrics: {
+            checkout_success_rate: summaryValue(
+              data,
+              "checkout_success_rate",
+              "rate",
+            ),
+            http_req_failed: summaryValue(data, "http_req_failed", "rate"),
+            http_req_duration_p95_ms: summaryValue(
+              data,
+              "http_req_duration",
+              "p(95)",
+            ),
+            checks_rate: summaryValue(data, "checks", "rate"),
+            iterations: summaryValue(data, "iterations", "count"),
+          },
+        };
+        return { stdout: `ENTEN_K6_SUMMARY=${JSON.stringify(payload)}\n` };
+      };
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-load
+  namespace: load
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:latest
+          env:
+            - name: CHAOS_AWARE
+              value: "true"
+          args:
+            - run
+            - /scripts/load.js
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: script
+          configMap:
+            name: k6-load-script
+  backoffLimit: 0

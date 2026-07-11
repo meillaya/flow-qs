@@ -3,19 +3,28 @@
 
 NAMESPACE := load
 
-.PHONY: load-smoke load-load load-stress load-spike clean logs-smoke logs-load logs-stress logs-spike
+.PHONY: load-smoke load-load load-stress load-spike clean logs-smoke logs-load logs-stress logs-spike verify-thresholds verify-summary verify-causal-demo
 
 load-smoke:
 	kubectl apply -f k6-job-smoke.yaml
 
 load-load:
-	kubectl apply -f k6-job-load.yaml
+	kubectl apply -f k6-job.yaml
 
 load-stress:
 	kubectl apply -f k6-job-stress.yaml
 
 load-spike:
 	kubectl apply -f k6-job-spike.yaml
+
+verify-thresholds:
+	./tests/verify-demo-thresholds.sh
+
+verify-summary:
+	./tests/verify-demo-summary.sh
+
+verify-causal-demo:
+	./tests/verify-causal-demo.sh
 
 logs-smoke:
 	kubectl logs job/k6-smoke -n $(NAMESPACE)

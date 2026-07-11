@@ -1,0 +1,30 @@
+{
+  "observed": {
+    "checkout_success_rate": 0.9025,
+    "http_req_failed": 0.0487,
+    "http_req_duration_p95_ms": 1884.26
+  },
+  "profiles": {
+    "strict": {
+      "checkout_success_rate_min": 0.95,
+      "http_req_failed_max": 0.01,
+      "http_req_duration_p95_max_ms": 1000
+    },
+    "chaos": {
+      "checkout_success_rate_min": 0.90,
+      "http_req_failed_max": 0.05,
+      "http_req_duration_p95_max_ms": 3000
+    }
+  },
+  "chaos_cases": [
+    {"name": "observed_live", "success": 0.9025, "failed": 0.0487, "p95_ms": 1884.26, "passes": true},
+    {"name": "success_boundary", "success": 0.90, "failed": 0.01, "p95_ms": 55, "passes": false},
+    {"name": "success_above", "success": 0.9001, "failed": 0.01, "p95_ms": 55, "passes": true},
+    {"name": "failure_boundary", "success": 0.95, "failed": 0.05, "p95_ms": 55, "passes": false},
+    {"name": "failure_below", "success": 0.95, "failed": 0.0499, "p95_ms": 55, "passes": true},
+    {"name": "latency_boundary", "success": 0.95, "failed": 0.01, "p95_ms": 3000, "passes": false},
+    {"name": "latency_below", "success": 0.95, "failed": 0.01, "p95_ms": 2999.9, "passes": true},
+    {"name": "pathological_latency", "success": 0.95, "failed": 0.01, "p95_ms": 30000, "passes": false},
+    {"name": "total_failure", "success": 0, "failed": 1, "p95_ms": 55, "passes": false}
+  ]
+}

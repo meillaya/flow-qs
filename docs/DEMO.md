@@ -1,248 +1,119 @@
 # Demo Guide
 
-This document explains what `make demo` does, how long it takes, and how to
-read the artifacts it produces.
+`make demo` runs a strict, causally correlated load-and-chaos incident demo.
+Partial readiness, unrelated postmortems, missing Chaos Mesh correlation, k6
+threshold failures, and incomplete cleanup all fail the run. There is no
+synthetic alert or fallback postmortem path.
 
-## What the Demo Does
+## Causal flow
 
-`make demo` runs a scripted, repeatable incident lifecycle:
+1. Verify all six application deployments, Chaos Mesh, Alertmanager, and
+   incident-engine are ready.
+2. Verify incident-engine can list `NetworkChaos` in `chaos-testing` and that
+   the checkout `ServiceDown` rule is loaded.
+3. Bounded-delete any same-name NetworkChaos, Workflow, Schedules,
+   WorkflowNodes, and generated PodChaos left by an interrupted prior run.
+4. Create a run-specific postmortem freshness marker and start the
+   chaos-aware k6 load Job.
+5. After 60 seconds, apply `demo-alert-checkout`, a three-minute NetworkChaos
+   partition affecting only synthetic-monitor traffic arriving at checkout.
+6. Wait for a fresh postmortem containing both:
 
-1. **Stack readiness probe** — verify the namespaces and key pods exist
-   (services in `ecom`, Chaos Mesh in `chaos-testing`, k6 namespace in `load`,
-   optional incident-engine in `incident`).
-2. **Load generation** — apply the k6 load Job (`load.js`):
-   50 → 100 VUs over ~5 minutes, then ramp down.
-3. **Settle (60s)** — let the load profile ramp before injecting failure.
-4. **Chaos injection** — apply `pod-kill-checkout` (PodChaos with
-   `action: container-kill` on one `checkout-service` container, scoped to
-   the `ecom` namespace only).
-5. **Wait for alert (180s)** — Prometheus MWMB alerts fire when latency or
-   error rate crosses the SLO threshold; Alertmanager routes the alert to the
-   incident-engine webhook.
-6. **Postmortem verification** — `kubectl exec` into the incident-engine pod
-   and list `/postmortems/`. If the incident-engine is not yet deployed (Task
-   22 is parallel Wave 4 work), the demo writes a **fallback postmortem** so
-   the artifact pipeline still has something to validate.
-7. **Wait for k6 to finish** — `kubectl wait --for=condition=complete`
-   the k6-load Job.
-8. **Summarize** — copy the postmortem to
-   `docs/examples/postmortems/postmortem-demo-<UTC-timestamp>.md`, write
-   `.omo/evidence/task-24-summary.txt`, and print a key-value summary.
+   ```text
+   # Postmortem — `ServiceDown` on `checkout-service`
+   **demo-alert-checkout** (NetworkChaos)
+   ```
 
-The script is implemented in `scripts/demo.sh` and wired to `make demo`.
+   Fresh unrelated, wrong-service, and uncorrelated postmortems are ignored.
+7. Confirm k6 is still active, then start the `pod-kill-checkout` Workflow.
+   It schedules one checkout pod kill every 60 seconds for five minutes.
+8. Copy and revalidate the correlated postmortem, require k6 success, parse its
+   compact stdout summary, and write the provisional run summary.
+9. Pause and bounded-delete the Workflow tree, delete the NetworkChaos to
+   restore the monitoring path, delete WorkflowNodes and the k6 Job, then
+   verify every resource is absent before printing `Demo complete`.
 
-## Timing Expectations
+This ordering keeps the alert, Chaos Mesh experiment, incident, and postmortem
+on checkout while preventing recurring pod replacement from interrupting the
+monitoring partition before `ServiceDown` is accepted.
 
-Total wall-clock: **~9 minutes 30 seconds** (target). Hard cap **15 minutes**
-enforced by a watchdog subshell that SIGTERMs the parent and triggers cleanup.
+## Safety and load contract
 
-| Step | Phase | Expected wall-clock | Cumulative |
-|------|-------|---------------------|------------|
-| 1 | Stack readiness probe | 2 – 5 s | 5 s |
-| 2 | k6 Job apply + pod scheduling | 5 – 30 s | 35 s |
-| 3 | Settle before chaos | 60 s | ~1 min 35 s |
-| 4 | Apply `pod-kill-checkout` | 1 s | ~1 min 36 s |
-| 5 | Wait for alert → incident-engine → postmortem | 180 s | ~4 min 36 s |
-| 6 | Verify postmortem on incident-engine pod | 5 – 10 s | ~4 min 46 s |
-| 7 | Wait for k6 Job to complete | ~5 min | ~9 min 46 s |
-| 8 | Collect k6 logs + results.json + summary | 10 s | ~9 min 56 s |
+`demo-alert-checkout` selects checkout pods in `ecom`, uses `direction: from`,
+and names only synthetic-monitor pods as its peer target. It does not partition
+k6 traffic from the `load` namespace and never targets the control plane.
 
-k6 load profile (`load/k6/load.js`):
+The dedicated demo Job sets the exact value `CHAOS_AWARE=true` and keeps these
+strict thresholds:
 
-- `2m` ramp 0 → 50 VUs
-- `3m` sustain at 100 VUs (this is the steady-state load)
-- `30s` ramp down to 0
-- Thresholds: `p(95) < 1000 ms`, error rate `< 1%`, checkout success `> 95%`
+- checkout success rate greater than 90%;
+- request failure rate below 5%;
+- request-duration p95 below 3000 ms.
 
-Chaos experiment (`chaos/experiments/pod-kill-checkout.yaml`):
-
-- Action: `container-kill`
-- Mode: `one`
-- Duration: `5m`
-- Selector: `app.kubernetes.io/name=checkout-service` in `ecom`
-- **Never targets control plane** (`kube-system`, `chaos-testing`, etc.)
+Standalone load remains greater than 95%, below 1%, and below 1000 ms. The k6
+Job exit is authoritative; the demo does not synthesize results or weaken a
+threshold after a failure.
 
 ## Prerequisites
 
-- `devenv shell` is active so `KUBECONFIG` is exported.
-- `make up` has finished and at least 2 of the 6 ecom deployments are
-  Available. Verify with:
+- All six services are Available in `ecom`.
+- Chaos Mesh 2.7.x is ready in `chaos-testing`.
+- Prometheus contains checkout's `ServiceDown` rule and Alertmanager is ready.
+- incident-engine is ready in `incident`, has persistent postmortem storage,
+  and its ServiceAccount can list NetworkChaos:
 
   ```bash
-  kubectl get deploy -n ecom
-  kubectl get pods -n chaos-testing
+  kubectl auth can-i list networkchaos.chaos-mesh.org \
+    -n chaos-testing \
+    --as=system:serviceaccount:incident:incident-engine
   ```
 
-- The `incident` namespace does not have to exist for the demo to run; if
-  `incident-engine` is missing, the demo falls back to writing a synthetic
-  postmortem from k6 evidence (see [Fallback Behavior](#fallback-behavior)).
+The command must print `yes`.
 
-## Run the Demo
+## Run
 
 ```bash
 make demo 2>&1 | tee /tmp/demo.log
 ```
 
-The script logs every step with a UTC timestamp. Look for these milestone
-lines:
+The total run has a 15-minute watchdog. Alert correlation has a 240-second
+budget after NetworkChaos admission. Pressing Ctrl+C or any failure invokes the
+same bounded cleanup path.
 
-| Milestone log line | Means |
-|--------------------|-------|
-| `Step 1/8: Verifying stack readiness` | Probe started |
-| `✓ <service> available` | A service passed the readiness wait |
-| `Step 2/8: Applying k6 load job` | k6 Job manifest applied |
-| `Step 3/8: Applying pod-kill-checkout PodChaos` | Chaos experiment applied |
-| `✓ postmortem found: /postmortems/<file>` | Real postmortem from incident-engine |
-| `Step 7/8: Collecting k6 results` | k6 Job completed; logs + results.json captured |
-| `Demo complete.` | Run finished successfully |
+Important progress lines are:
 
-Every log line is also written to `.omo/evidence/task-24-demo.log`.
-
-## What to Expect
-
-### During Load
-
-The k6 Job sends checkout requests (`POST /cart/{user_id}/items` then
-`POST /checkout`). In Grafana you can watch:
-
-- **RED dashboard**: request rate, error rate, duration per service.
-- **SLO Status dashboard**: remaining error budget.
-- **Trace Explorer**: individual checkout traces.
-
-### During Chaos
-
-The `pod-kill-checkout` experiment terminates the `checkout-service`
-container inside one pod. Because checkout-service runs with 2 replicas, the
-deployment absorbs the failure: the replica set creates a fresh container,
-RESTARTS increments, and clients see at most a single brief 503 spike. The
-k6 success-rate threshold (`> 95%`) may briefly dip.
-
-### After the Alert
-
-When Prometheus + Alertmanager + incident-engine are all deployed:
-
-1. Prometheus evaluates the MWMB recording rules for `checkout-service`
-   every 30 s.
-2. The latency / error-rate burn-rate alert transitions `Pending → Firing`.
-3. Alertmanager receives the alert and POSTs it to
-   `http://incident-engine.incident.svc:8088/webhook`.
-4. The incident-engine queries Tempo, Loki, and Prometheus for context
-   around the alert window and writes
-   `postmortem-<alertname>-<ts>.md` to `/postmortems/`.
-
-`make demo` then `kubectl cp`s that file out of the pod to
-`docs/examples/postmortems/postmortem-demo-<ts>.md`.
-
-## Interpreting the Postmortem
-
-A generated postmortem contains:
-
-- **Summary**: the service, alert, and SLO affected.
-- **Impact**: duration, error rate, and requests affected (estimated from
-  Prometheus).
-- **Timeline**: alert fired, experiment applied, recovery observed.
-- **Root cause**: the injected fault, for example network delay on
-  payment-gateway.
-- **Resolution**: auto-detected when the alert stops firing.
-- **Lessons Learned**: human-fillable section.
-
-The fallback postmortem is clearly labeled "Demo Postmortem (fallback)" in
-its first heading and includes the same six sections plus a note explaining
-why it was synthesized.
-
-## Inspecting Logs and Traces
-
-```bash
-# Follow the k6 load Job's logs
-kubectl logs -n load -l job-name=k6-load -f
-
-# Find the trace ID from a failed checkout response
-curl -s -X POST http://localhost:8003/checkout \
-  -H "Content-Type: application/json" \
-  -d '{"user_id":"u1","payment_method":"card"}' -i
-
-# Search Tempo for that trace ID
-curl -s "http://localhost:3200/api/traces/<trace-id>" | jq
-
-# Search Loki for checkout-service logs
-curl -s "http://localhost:3100/loki/api/v1/query_range?query=%7Bservice_name%3D%22checkout-service%22%7D" | jq
+```text
+Step 3/8: applying monitoring-path NetworkChaos
+Step 4/8: waiting up to 240s for matching checkout ServiceDown
+Step 5/8: starting recurring checkout pod-kill workflow
+Step 5/8: copying the causally correlated postmortem
+Run checks passed; finalizing cleanup
+Demo complete.
 ```
 
-## Artifacts Produced
+## Artifacts
 
 | File | Contents |
-|------|----------|
-| `.omo/evidence/task-24-demo.log` | Full timestamped stdout from the run |
-| `.omo/evidence/task-24-summary.txt` | Key-value summary (run id, durations, flags) |
-| `.omo/evidence/task-24-k6-job.log` | Captured `kubectl logs` of the k6-load Job |
-| `.omo/evidence/task-24-k6-results.json` | Parsed k6 metrics (p95, error rate, checks) |
-| `docs/examples/postmortems/postmortem-demo-<ts>.md` | The postmortem — either copied from the incident-engine pod or synthesized as a fallback |
+|---|---|
+| `.omo/evidence/task-24-demo.log` | Timestamped orchestration and cleanup receipts |
+| `.omo/evidence/task-24-summary.txt` | Success-only incident identity and run summary |
+| `.omo/evidence/task-24-k6-job-<run-id>.log` | Current run's k6 stdout |
+| `.omo/evidence/task-24-k6-results-<run-id>.json` | Validated compact k6 metrics |
+| `docs/examples/postmortems/postmortem-demo-<run-id>.md` | Fresh checkout postmortem with exact NetworkChaos correlation |
 
-## Aborting the Demo
+The success summary records `incident_alert=ServiceDown`,
+`incident_service=checkout-service`, `incident_chaos=demo-alert-checkout`,
+`incident_chaos_kind=NetworkChaos`, and
+`checkout_podkill_workflow=pod-kill-checkout`.
 
-Press `Ctrl+C` to stop the demo. The `trap cleanup EXIT` handler in
-`scripts/demo.sh` runs and:
+## Failure and cleanup behavior
 
-1. Kills the 15-minute watchdog subshell.
-2. Deletes the `pod-kill-checkout` PodChaos (if applied).
-3. Deletes the `k6-load` Job (if applied).
+The demo exits nonzero for missing services, RBAC, alert rules, admission,
+correlation, active k6 load, postmortem copy validation, k6 thresholds, timeout,
+or cleanup. A failed run never retains a success summary or stale k6 result.
 
-Neither the chaos experiment nor the k6 Job will be left running.
-
-## Fallback Behavior
-
-`make demo` is designed to be useful even before the full Wave 4 stack is
-deployed. The following fallbacks are exercised:
-
-- **Fewer than 2 ecom services ready**: the script exits 0 with
-  `mode=fallback` written to `.omo/evidence/task-24-summary.txt`. No k6 Job
-  or chaos experiment is applied.
-- **Chaos Mesh not ready**: the script exits 1 with a clear error message
-  (because k6 + chaos is the whole point of the demo).
-- **incident-engine not deployed**: the demo runs the load and chaos phases
-  normally, then synthesizes a fallback postmortem in step 8 with the same
-  six sections plus an explanatory note.
-- **k6 Job does not complete within 10 minutes**: the script dumps the
-  partial logs to `.omo/evidence/task-24-k6-job.log`, marks
-  `k6_completed=false` in the summary, and exits 0.
-
-To force the fallback path explicitly for testing:
-
-```bash
-DEMO_FORCE_FALLBACK=1 make demo-fallback
-```
-
-## Cleaning Up
-
-The demo does not tear down the cluster. After you finish:
-
-```bash
-make down
-```
-
-To remove only the chaos experiments:
-
-```bash
-make -C chaos clean
-```
-
-## Troubleshooting
-
-- **`FATAL: Chaos Mesh controller not ready in chaos-testing`**:
-  `make up` did not finish, or Chaos Mesh is not installed. Re-run
-  `make up` or install Chaos Mesh manually
-  (`helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-testing --create-namespace`).
-- **k6 Job stays in `ContainerCreating`**: the k6 image is being pulled;
-  wait up to 60s on the first run.
-- **No postmortem found**: verify the incident-engine pod is running
-  (`kubectl get pods -n incident`) and that Alertmanager can reach
-  `http://incident-engine.incident.svc:8088/webhook`. The demo will fall
-  back to a synthesized postmortem so the artifact pipeline still has
-  content to validate.
-- **k6 Job fails with `p95 latency > 1000ms`**: the cluster is
-  undersized for 100 VUs. Reduce `K6_VUS` or run the spike profile
-  (`load/k6-job-spike.yaml`) on a larger node pool.
-- **Demo runs longer than 15 minutes**: the watchdog subshell sends
-  `SIGTERM` to the parent and triggers cleanup. Reduce
-  `SETTLE_BEFORE_CHAOS` or `WAIT_FOR_ALERT` in `scripts/demo.sh` to
-  tighten the budget.
+Cleanup first pauses the Workflow and generated Schedules, then requests
+bounded `--wait=false` deletion of the Workflow, Schedules, and generated
+PodChaos. It next deletes `networkchaos/demo-alert-checkout`, WorkflowNodes,
+and the k6 Job, then performs a bounded absence poll. Finalizers are never
+stripped. Remaining resources make cleanup and the demo fail closed.
