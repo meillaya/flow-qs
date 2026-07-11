@@ -1,0 +1,2 @@
+running demo load
+ENTEN_K6_SUMMARY={"schema":"enten.k6.summary/v1","profile":"demo-chaos","metrics":{"checkout_success_rate":0.9475,"http_req_failed":0.0262,"http_req_duration_p95_ms":55,"checks_rate":0.965,"iterations":1221}}
