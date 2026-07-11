@@ -83,6 +83,7 @@ resource "null_resource" "k3d_cluster" {
   provisioner "local-exec" {
     command = <<-EOT
       set -e
+      umask 077
       export PATH="${local.k3d_dir}:$PATH"
       export KUBECONFIG="${local.kubeconfig}"
       mkdir -p "$(dirname "$KUBECONFIG")"
@@ -105,6 +106,7 @@ resource "null_resource" "k3d_cluster" {
 
         ${local.k3d_bin} kubeconfig get ${var.cluster_name} > "$KUBECONFIG"
       fi
+      chmod 600 "$KUBECONFIG"
     EOT
   }
 

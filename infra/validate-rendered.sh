@@ -13,6 +13,11 @@ grep -q 'terraform -chdir=.* destroy' "$tmp/clean"
 grep -q 'k3d cluster delete' "$tmp/clean"
 grep -q 'k3d registry delete' "$tmp/clean"
 
+sed -n '/resource "null_resource" "k3d_cluster"/,/resource "null_resource" "namespaces"/p' \
+  infra/cluster/main.tf >"$tmp/k3d-cluster"
+grep -q 'umask 077' "$tmp/k3d-cluster"
+grep -q 'chmod 600 .*KUBECONFIG' "$tmp/k3d-cluster"
+
 expected='incident-engine
 cart-service
 catalog-service
