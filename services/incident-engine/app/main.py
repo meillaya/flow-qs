@@ -18,13 +18,14 @@ import contextlib
 import logging
 import os
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
@@ -120,11 +121,12 @@ class AppState:
         self.client: httpx.AsyncClient | None = None
         self.chaos: ChaosSource | None = None
         self._background_task: asyncio.Task[None] | None = None
+        self._meter_provider: MeterProvider | None = None
 
 
-def _setup_otel_metrics() -> None:
+def _setup_otel_metrics() -> MeterProvider:
     """Configure OTel meter provider with OTLP + Prometheus readers."""
-    from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+    from opentelemetry.sdk.metrics.export import MetricReader, PeriodicExportingMetricReader
 
     resource = Resource.create(
         {
@@ -132,19 +134,19 @@ def _setup_otel_metrics() -> None:
             "deployment.environment": "dev",
         }
     )
-    readers: list = [PrometheusMetricReader()]
+    readers: list[MetricReader] = [PrometheusMetricReader()]
     try:
         exporter = OTLPMetricExporter(
             endpoint=OTLP_ENDPOINT,
             insecure=OTLP_ENDPOINT.startswith("http://"),
-            timeout=5,
+            timeout=2,
         )
         readers.append(PeriodicExportingMetricReader(exporter, export_interval_millis=30000))
         logger.info("OTLP metric exporter configured for %s", OTLP_ENDPOINT)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Failed to create OTLP metric exporter: %s", exc)
     provider = MeterProvider(resource=resource, metric_readers=readers)
-    metrics.set_meter_provider(provider)
+    return provider
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +156,8 @@ def _setup_otel_metrics() -> None:
 
 async def _resolve_reconciler(state: AppState) -> None:
     """Periodically mark stale incidents as ``resolved`` after timeout."""
-    meter = metrics.get_meter(__name__)
+    meter_provider = state._meter_provider or metrics.get_meter_provider()
+    meter = meter_provider.get_meter(__name__)
     incidents_processed = meter.create_counter(
         "incident_engine_resolved_total",
         description="Number of incidents auto-resolved by the reconciler",
@@ -204,7 +207,7 @@ def create_app(
     LoggingInstrumentor().instrument(set_logging_format=True)
 
     @asynccontextmanager
-    async def _custom_lifespan(app_ref: FastAPI) -> Any:
+    async def _custom_lifespan(app_ref: FastAPI) -> AsyncIterator[None]:
         """Lifecycle that honours explicit overrides for tests."""
         state = AppState()
         if store is not None:
@@ -221,10 +224,18 @@ def create_app(
                 client=client,
             )
         state.chaos = chaos_source or KubernetesChaosClient.from_cluster() or RegisteredChaosSource()
+        state._meter_provider = _setup_otel_metrics()
+        state._background_task = asyncio.create_task(_resolve_reconciler(state))
+        await asyncio.sleep(0)
         app_ref.state.app_state = state
         try:
             yield
         finally:
+            state._background_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await state._background_task
+            if state._meter_provider is not None:
+                state._meter_provider.shutdown(timeout_millis=2_000)
             if state.context is not None and isinstance(state.context, HTTPXUpstreamContext):
                 with contextlib.suppress(Exception):
                     await state.context.aclose()
@@ -412,9 +423,9 @@ def register_routes(app: FastAPI) -> None:
         return {"status": "ok"}
 
     @app.get("/metrics")
-    async def metrics_endpoint() -> JSONResponse:
+    async def metrics_endpoint() -> Response:
         """Prometheus scrape endpoint."""
-        return JSONResponse(content=generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST)
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/webhook", response_model=WebhookResponse)
     async def webhook(payload: AlertmanagerPayload, state: Annotated[AppState, Depends(get_state)]) -> WebhookResponse:

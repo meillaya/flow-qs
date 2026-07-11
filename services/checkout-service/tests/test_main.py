@@ -162,3 +162,28 @@ def test_checkout_order_failure_triggers_rollback(
     # Rollback comps must have fired
     assert len(fake_inventory.released) == 1
     assert len(fake_payment.refunds) == 1
+
+
+@pytest.mark.asyncio
+async def test_lifespan_closes_all_owned_singleton_clients_once(monkeypatch) -> None:
+    import app.main as main
+
+    calls: list[str] = []
+
+    class ClosingClient:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def aclose(self) -> None:
+            calls.append(self.name)
+
+    monkeypatch.setattr(main, "init_tracing", lambda: None)
+    monkeypatch.setattr(main, "_cart", ClosingClient("cart"))
+    monkeypatch.setattr(main, "_inventory", ClosingClient("inventory"))
+    monkeypatch.setattr(main, "_payment", ClosingClient("payment"))
+    monkeypatch.setattr(main, "_order", ClosingClient("order"))
+
+    async with main.lifespan(main.app):
+        assert calls == []
+
+    assert calls == ["cart", "inventory", "payment", "order"]

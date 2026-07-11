@@ -164,7 +164,7 @@ def test_chart_grants_read_only_chaos_mesh_access() -> None:
 
     assert role["metadata"]["namespace"] == "chaos-testing"
     assert role["rules"][0]["apiGroups"] == ["chaos-mesh.org"]
-    assert set(role["rules"][0]["verbs"]) == {"get", "list", "watch"}
+    assert set(role["rules"][0]["verbs"]) == {"list"}
     assert set(role["rules"][0]["resources"]) == {
         "podchaos",
         "networkchaos",

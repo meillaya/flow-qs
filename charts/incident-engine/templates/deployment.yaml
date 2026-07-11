@@ -44,10 +44,14 @@ spec:
               value: "service.name={{ .Values.serviceName | default "incident-engine" }},deployment.environment=dev"
             - name: OTEL_TRACES_EXPORTER
               value: "otlp"
+            - name: OTEL_EXPORTER_OTLP_TRACES_TIMEOUT
+              value: "2"
             - name: OTEL_METRICS_EXPORTER
-              value: "otlp"
+              value: "none"
             - name: OTEL_LOGS_EXPORTER
               value: "otlp"
+            - name: OTEL_EXPORTER_OTLP_LOGS_TIMEOUT
+              value: "2"
             - name: CHAOS_NAMESPACE
               value: {{ .Values.chaosApi.namespace | quote }}
             {{- range $key, $value := .Values.env }}

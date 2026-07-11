@@ -47,7 +47,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         init_tracing()
     except Exception:  # pragma: no cover
         logger.exception("otel init failed; continuing without remote export")
-    yield
+    try:
+        yield
+    finally:
+        await _cart.aclose()
+        await _inventory.aclose()
+        await _payment.aclose()
+        await _order.aclose()
 
 
 app = FastAPI(
