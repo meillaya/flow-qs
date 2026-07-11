@@ -21,9 +21,31 @@ case " $* " in
         while :; do sleep 60; done
         ;;
     *" get pods -A --no-headers "*)
-        printf '%s\n' \
-            'observability otel-collector-a 1/1 Running 0 1m' \
-            'observability otel-collector-b 1/1 Running 0 1m'
+        case "${MOCK_POD_STATE:-valid}" in
+            valid)
+                printf '%s\n' \
+                    'observability otel-collector-a 1/1 Running 0 1m' \
+                    'observability otel-collector-b 1/1 Running 0 1m'
+                ;;
+            one_of_three)
+                printf '%s\n' \
+                    'observability pod-a 1/1 Running 0 1m' \
+                    'observability pod-b 0/1 Running 0 1m' \
+                    'observability pod-c 0/1 Pending 0 1m'
+                ;;
+            two_of_three)
+                printf '%s\n' \
+                    'observability pod-a 1/1 Running 0 1m' \
+                    'observability pod-b 1/1 Running 0 1m' \
+                    'observability pod-c 0/1 Running 0 1m'
+                ;;
+            malformed)
+                printf '%s\n' \
+                    'observability pod-a 1/1 Running 0 1m' \
+                    'observability broken-row' \
+                    'ecom unrelated 1/1 Running 0 1m'
+                ;;
+        esac
         ;;
     *" get deployment otel-collector "*)
         case "${MOCK_COLLECTOR_STATE:-valid}" in
@@ -178,7 +200,7 @@ assert_status() {
 
 run_check() {
     local check="$1" invalid_rules="${2:-0}" mock_failure="${3:-}" grafana_body="${4:-}"
-    local collector_state="${5:-valid}" missing_service="${6:-}"
+    local collector_state="${5:-valid}" missing_service="${6:-}" pod_state="${7:-valid}"
     : >"${TMP_DIR}/kubectl-${check}.log"
     : >"${TMP_DIR}/kubectl-${check}.pids"
     : >"${TMP_DIR}/curl-${check}.log"
@@ -194,6 +216,7 @@ run_check() {
         MOCK_GRAFANA_BODY="${grafana_body}" \
         MOCK_COLLECTOR_STATE="${collector_state}" \
         MOCK_MISSING_SERVICE="${missing_service}" \
+        MOCK_POD_STATE="${pod_state}" \
         bash "${VERIFY}" "${check}" >"${TMP_DIR}/check-${check}-${invalid_rules}.out" 2>&1
     RUN_STATUS=$?
     set -e
@@ -280,6 +303,11 @@ PY
 
 run_check 3
 assert_status "${RUN_STATUS}" 0 "Collector readiness accepts exactly 2/2 desired and ready replicas"
+
+for pod_state in one_of_three two_of_three malformed; do
+    run_check 3 0 '' '' valid '' "${pod_state}"
+    assert_status "${RUN_STATUS}" 1 "Observability pod readiness fails closed for ${pod_state}"
+done
 
 for collector_state in one_of_two two_of_three malformed empty; do
     run_check 3 0 '' '' "${collector_state}"

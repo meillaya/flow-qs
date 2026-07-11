@@ -171,9 +171,28 @@ check_3_pods_ready() {
         record FAIL "3.pods-ready" "collector deployment query error: ${collector_out}"
         return
     fi
-    local total ready
-    total=$(printf '%s\n' "${out}" | grep -vc 'NAMESPACE' || true)
-    ready=$(printf '%s\n' "${out}" | awk '$4 ~ /^Running/' | grep -cE '([0-9]+)\/(\1)' || true)
+    local total ready malformed
+    read -r total ready malformed < <(
+        printf '%s\n' "${out}" | awk -v target_ns="${OBS_NS}" '
+            $1 != target_ns { next }
+            {
+                total++
+                if (NF < 4) {
+                    malformed++
+                    next
+                }
+                count = split($3, containers, "/")
+                if (count != 2 || containers[1] !~ /^[0-9]+$/ || containers[2] !~ /^[0-9]+$/ || containers[2] == 0) {
+                    malformed++
+                    next
+                }
+                if ($4 == "Running" && containers[1] == containers[2]) {
+                    ready++
+                }
+            }
+            END { printf "%d %d %d\n", total, ready, malformed }
+        '
+    )
     local collector_desired="invalid" collector_ready="invalid"
     read -r collector_desired collector_ready < <(
         printf '%s' "${collector_out}" | jq -er '
@@ -186,11 +205,13 @@ check_3_pods_ready() {
             end
         ' 2>/dev/null || printf 'invalid\tinvalid\n'
     )
-    log "  pods=${ready}/${total} Ready+Running  otel-collector=${collector_ready}/${collector_desired} Ready"
+    log "  observability pods=${ready}/${total} Ready+Running malformed=${malformed}  otel-collector=${collector_ready}/${collector_desired} Ready"
     if [[ "${total}" -eq 0 ]]; then
-        record FAIL "3.pods-ready" "no pods visible"
-    elif [[ "${ready}" -eq 0 ]]; then
-        record FAIL "3.pods-ready" "no pods in Ready+Running state"
+        record FAIL "3.pods-ready" "no observability pods visible"
+    elif [[ "${malformed}" -gt 0 ]]; then
+        record FAIL "3.pods-ready" "malformed observability pod rows=${malformed}"
+    elif [[ "${ready}" -ne "${total}" ]]; then
+        record FAIL "3.pods-ready" "observability pods expected all Ready+Running, got ${ready}/${total}"
     elif [[ "${collector_desired}" != "2" || "${collector_ready}" != "2" ]]; then
         record FAIL "3.pods-ready" "otel-collector expected ready/desired=2/2, got ${collector_ready}/${collector_desired}"
     else
