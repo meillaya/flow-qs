@@ -11,12 +11,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import anyio
 import grpc
 import httpx
 import pytest
 
 from app import main
 from app.clients import GrpcInventoryClient, HttpxCartClient
+from app.models import Reservation
 from app.orchestrator import CheckoutOrchestrator
 
 
@@ -109,6 +111,21 @@ async def test_inventory_readiness_uses_real_supported_surface(real_inventory: s
         assert await client.health() is True
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_inventory_release_propagates_task_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class CancelledReleaseStub:
+        async def ReleaseStock(self, *_args: Any, **_kwargs: Any) -> None:
+            raise anyio.get_cancelled_exc_class()
+
+    client = GrpcInventoryClient(addr="unused")
+    monkeypatch.setattr(client, "_get_stub", CancelledReleaseStub)
+
+    with pytest.raises(anyio.get_cancelled_exc_class()):
+        await client.release(Reservation(sku="SKU-001", quantity=1))
 
 
 @pytest.mark.asyncio

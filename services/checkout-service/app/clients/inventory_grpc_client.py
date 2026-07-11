@@ -80,7 +80,7 @@ class GrpcInventoryClient:
             await self._get_stub().ReleaseStock(
                 req, timeout=settings.grpc_timeout_seconds
             )
-        except (grpc.RpcError, asyncio.CancelledError):
+        except grpc.RpcError:
             logger.exception(
                 "inventory.release failed for sku=%s", reservation.sku
             )
