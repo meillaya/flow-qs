@@ -149,6 +149,18 @@ async def test_non_object_tempo_payload_degrades_to_empty_context() -> None:
                 ],
             },
         },
+        {
+            "status": "success",
+            "data": {
+                "resultType": "streams",
+                "result": [
+                    {
+                        "stream": [],
+                        "values": [["1783751446180740096", "should be rejected"]],
+                    }
+                ],
+            },
+        },
     ],
 )
 async def test_malformed_loki_schema_degrades_to_empty_context(payload: Any) -> None:
@@ -222,6 +234,13 @@ async def test_prometheus_error_or_wrong_type_degrades_to_empty_context() -> Non
             "data": {
                 "resultType": "vector",
                 "result": [{"metric": {}, "values": [[1783751446, "1"]]}],
+            },
+        },
+        {
+            "status": "success",
+            "data": {
+                "resultType": "matrix",
+                "result": [{"metric": [], "values": [[1783751446, "1"]]}],
             },
         },
     ]

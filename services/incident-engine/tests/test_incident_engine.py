@@ -530,6 +530,56 @@ def test_resolved_webhook_without_end_time_uses_receipt_time(
     assert any("resolved" in event["message"] for event in detail["timeline"])
 
 
+def test_replay_replaces_empty_context_markers_with_evidence(temp_paths) -> None:
+    """Recovered upstream evidence cannot coexist with stale empty-result claims."""
+    context = StaticUpstreamContext()
+    alert = _make_alert("EnrichedReplay", "cart-service").model_copy(
+        update={"status": "resolved"}
+    )
+    app = create_app(context=context)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="resolved", alerts=[alert]).model_dump(),
+        )
+        incident_id = response.json()["incidents"][0]
+        context.traces = [
+            TraceHit(
+                trace_id="abc123",
+                root_service="cart-service",
+                start_time="2026-07-09T21:00:00+00:00",
+            )
+        ]
+        context.logs = [
+            LogHit(timestamp="2026-07-09T21:00:01+00:00", line="recovered log")
+        ]
+        context.metrics = [
+            MetricSnapshot(
+                name="error_rate",
+                value=0.2,
+                timestamp="2026-07-09T21:00:02+00:00",
+            )
+        ]
+        client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="resolved", alerts=[alert]).model_dump(),
+        )
+        detail = client.get(f"/incidents/{incident_id}").json()
+
+    context_events = [
+        event
+        for event in detail["timeline"]
+        if event["source"] in {"tempo", "loki", "prometheus"}
+    ]
+    assert {event["source"] for event in context_events} == {
+        "tempo",
+        "loki",
+        "prometheus",
+    }
+    assert all(not event["details"].get("empty") for event in context_events)
+
+
 def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context) -> None:
     """An out-of-order firing retry cannot reopen or contaminate a resolved incident."""
     reset_chaos_state()

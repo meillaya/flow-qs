@@ -213,7 +213,7 @@ class HTTPXUpstreamContext:
         for stream in streams:
             if not isinstance(stream, dict):
                 continue
-            raw_labels = stream.get("stream") or {}
+            raw_labels = stream.get("stream")
             values = stream.get("values") or []
             if not isinstance(raw_labels, dict) or not isinstance(values, list):
                 continue
@@ -288,7 +288,7 @@ class HTTPXUpstreamContext:
             for series in results:
                 if not isinstance(series, dict):
                     continue
-                metric_labels = series.get("metric") or {}
+                metric_labels = series.get("metric")
                 values = series.get("values") or []
                 if not isinstance(metric_labels, dict) or not isinstance(values, list) or not values:
                     continue

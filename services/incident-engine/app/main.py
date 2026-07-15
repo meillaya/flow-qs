@@ -447,9 +447,14 @@ async def _process_alert_serialized(
                     and "resolved" in event.message
                 )
             ]
+        merged_events = [*previous_events, *timeline_events]
+        concrete_sources = {
+            event.source for event in merged_events if not event.details.get("empty")
+        }
         unique_events = {
             (event.timestamp, event.source, event.message): event
-            for event in [*previous_events, *timeline_events]
+            for event in merged_events
+            if not (event.details.get("empty") and event.source in concrete_sources)
         }
         timeline_events = sorted(
             unique_events.values(), key=lambda event: parse_iso(event.timestamp)
