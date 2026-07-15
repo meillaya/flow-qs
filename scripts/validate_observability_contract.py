@@ -140,6 +140,7 @@ def validate_rules(repo_root: Path) -> list[str]:
         f"slo:{service}:availability:error_budget_remaining:30d"
         for service in SERVICES
     )
+    expected_records.add("synthetic_check_success")
     missing_records = expected_records - records
     extra_records = records - expected_records
     if missing_records:
@@ -252,17 +253,35 @@ def validate_dashboards(repo_root: Path) -> list[str]:
         "02-red-checkout.json",
         "02-red-inventory.json",
         "02-red-order.json",
-        "02-red-payment.json",
         "03-trace-explorer.json",
         "04-log-explorer.json",
     }:
         if variable_contract not in collect_variable_queries(documents.get(file_name, {})):
             errors.append(f"{file_name}: canonical service variable missing")
+    payment_variable = (
+        'label_values(http_server_request_duration_seconds_count{service_name="payment-gateway"}, '
+        "service_name)"
+    )
+    if payment_variable not in collect_variable_queries(
+        documents.get("02-red-payment.json", {})
+    ):
+        errors.append("02-red-payment.json: direct-scrape service variable missing")
     overview_queries = {query for _title, query, _kind, _uid in collect_queries(
         documents.get("01-service-overview.json", {})
     )}
-    if 'synthetic_check_success{service_namespace="ecom"}' not in overview_queries:
-        errors.append("service overview does not use synthetic health")
+    overview_health_query = (
+        'max by (service) (synthetic_check_success{service_namespace="ecom"})'
+    )
+    if overview_health_query not in overview_queries:
+        errors.append("service overview does not expose readable per-service health")
+    overview_rate_query = (
+        'sum by (service_name) (rate(http_server_request_duration_seconds_count'
+        '{service_namespace="ecom"}[5m])) or sum by (service_name) '
+        '(rate(http_server_request_duration_seconds_count'
+        '{service_name="payment-gateway"}[5m]))'
+    )
+    if overview_rate_query not in overview_queries:
+        errors.append("service overview request rate omits direct-scrape payment traffic")
     red_services = {
         "02-red-cart.json": "cart-service",
         "02-red-catalog.json": "catalog-service",
@@ -286,7 +305,9 @@ def validate_dashboards(repo_root: Path) -> list[str]:
                 errors.append(f"{file_name}: RED query omits canonical histogram: {query}")
             if f'service_name="{service}"' not in query:
                 errors.append(f"{file_name}: query omits canonical service identity: {query}")
-            if 'service_namespace="ecom"' not in query:
+            if service == "payment-gateway" and 'service_namespace="ecom"' in query:
+                errors.append(f"{file_name}: direct-scrape query wrongly requires namespace: {query}")
+            if service != "payment-gateway" and 'service_namespace="ecom"' not in query:
                 errors.append(f"{file_name}: query omits service_namespace: {query}")
     slo_queries = collect_queries(documents.get("05-slo-status.json", {}))
     for service, objective in SERVICES.items():
@@ -305,13 +326,19 @@ def validate_dashboards(repo_root: Path) -> list[str]:
     budget_panels = [
         panel
         for panel in collect_panels(documents.get("05-slo-status.json", {}).get("panels"))
-        if isinstance(panel.get("title"), str)
-        and str(panel["title"]).startswith("Error budget remaining")
+        if any(
+            query.startswith('{__name__="slo:')
+            and query.endswith(':availability:error_budget_remaining:30d"}')
+            for _title, query, _kind, _uid in collect_queries({"panels": [panel]})
+        )
     ]
     if len(budget_panels) != 7:
         errors.append(f"SLO dashboard expected 7 budget panels, found {len(budget_panels)}")
     for panel in budget_panels:
         serialized = json.dumps(panel, sort_keys=True)
+        title = panel.get("title")
+        if not isinstance(title, str) or title not in SERVICES:
+            errors.append(f"{title}: budget panel title must preserve its service identity")
         if '"unit": "percent"' not in serialized or '"max": 100' not in serialized:
             errors.append(f"{panel['title']}: budget must use a 0-100 percent scale")
         if '"value": 25' not in serialized or '"value": 50' not in serialized:
@@ -345,7 +372,7 @@ def main() -> int:
         for error in errors:
             print(f"FAIL: {error}", file=sys.stderr)
         return 1
-    print("PASS: 105 recording rules, 48 alert rules, 10 dashboards")
+    print("PASS: 106 recording rules, 48 alert rules, 10 dashboards")
     return 0
 
 

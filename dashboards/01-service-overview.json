@@ -222,7 +222,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "count(synthetic_check_success{service_namespace=\"ecom\"} == 0)",
+          "expr": "sum(synthetic_check_success{service_namespace=\"ecom\"} == bool 0)",
           "legendFormat": "down",
           "instant": true
         }
@@ -278,7 +278,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])) + sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\"}[5m]))",
           "legendFormat": "rps"
         }
       ]
@@ -341,7 +341,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])), 1e-9)",
+          "expr": "((sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",http_response_status_code=~\"5..\"}[5m])) or (0 * sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])))) + (sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\",http_response_status_code=~\"5..\"}[5m])) or (0 * sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\"}[5m]))))) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])) + sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\"}[5m])), 1e-9)",
           "legendFormat": "error_ratio"
         }
       ]
@@ -466,7 +466,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "synthetic_check_success{service_namespace=\"ecom\"}",
+          "expr": "max by (service) (synthetic_check_success{service_namespace=\"ecom\"})",
           "format": "table",
           "instant": true,
           "legendFormat": "{{service}}"
@@ -528,7 +528,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m]))",
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])) or sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\"}[5m]))",
           "legendFormat": "{{service_name}}"
         }
       ]
@@ -590,7 +590,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum by (service_name) (rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])), 1e-9)",
+          "expr": "(sum by (service_name) (rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum by (service_name) (rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}[5m])), 1e-9)) or (sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=\"payment-gateway\"}[5m])), 1e-9))",
           "legendFormat": "{{service_name}}"
         }
       ]
@@ -650,7 +650,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\"}[5m]))) or histogram_quantile(0.99, sum by (service_name, le) (rate(http_server_request_duration_seconds_bucket{service_name=\"payment-gateway\"}[5m])))",
           "legendFormat": "{{service_name}}"
         }
       ]

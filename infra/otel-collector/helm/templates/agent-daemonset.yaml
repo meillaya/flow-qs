@@ -13,6 +13,8 @@ spec:
       app.kubernetes.io/component: filelog-agent
   template:
     metadata:
+      annotations:
+        checksum/config: {{ .Values.agentCollectorConfig | sha256sum }}
       labels:
         {{- include "otel-collector.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: filelog-agent

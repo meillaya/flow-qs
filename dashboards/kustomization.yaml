@@ -32,6 +32,7 @@ configMapGenerator:
       - 04-log-explorer.json
       - 05-slo-status.json
     options:
+      disableNameSuffixHash: true
       labels:
         # Required: grafana sidecar selector
         grafana_dashboard: "1"

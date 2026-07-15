@@ -56,6 +56,9 @@ pass_or_record 'obsolete synthetic static scrape removed' not_contains infra/pro
 pass_or_record 'Loki retention compactor enabled' contains infra/loki/helm-values.yaml 'retention_enabled: true'
 pass_or_record 'Loki uses chart compactor merge point' contains infra/loki/helm-values.yaml '  compactor:'
 pass_or_record 'Loki full structured override removed' not_contains infra/loki/helm-values.yaml 'structuredConfig:'
+pass_or_record 'Grafana disables mutable startup plugin installs' contains infra/grafana/helm-values.yaml 'preinstall_disabled: true'
+pass_or_record 'Grafana has dashboard-query headroom' yq -e '.resources.limits.cpu == "1" and .resources.limits.memory == "1Gi"' infra/grafana/helm-values.yaml
+pass_or_record 'Grafana dashboard ConfigMap has a stable identity' contains dashboards/kustomization.yaml 'disableNameSuffixHash: true'
 
 pass_or_record 'Collector is one gateway replica' contains infra/otel-collector/helm/values.yaml 'replicaCount: 1'
 pass_or_record 'Collector gateway limiter is 400MiB' contains infra/otel-collector/helm/values.yaml 'limit_mib: 400'
@@ -63,7 +66,10 @@ pass_or_record 'Collector gateway spike is 100MiB' contains infra/otel-collector
 pass_or_record 'Collector enrichment enabled' contains infra/otel-collector/helm/values.yaml 'passthrough: false'
 pass_or_record 'Collector servicegraph configured' contains infra/otel-collector/helm/values.yaml 'servicegraph:'
 pass_or_record 'Collector filelog agent configured' contains infra/otel-collector/helm/values.yaml 'agentCollectorConfig: |'
+pass_or_record 'Collector filelog identity associates logs by pod UID' contains infra/otel-collector/helm/values.yaml 'name: k8s.pod.uid'
 pass_or_record 'Collector filelog DaemonSet template exists' test -f infra/otel-collector/helm/templates/agent-daemonset.yaml
+pass_or_record 'Collector gateway rolls on config changes' contains infra/otel-collector/helm/templates/deployment.yaml 'checksum/config:'
+pass_or_record 'Collector filelog agents roll on config changes' contains infra/otel-collector/helm/templates/agent-daemonset.yaml 'checksum/config:'
 pass_or_record 'Collector agent has no Service template' test ! -f infra/otel-collector/helm/templates/agent-service.yaml
 pass_or_record 'duplicate standalone collector config removed' test ! -e infra/otel-collector/configmap.yaml
 pass_or_record 'duplicate standalone collector kustomize removed' test ! -e infra/otel-collector/kustomization.yaml

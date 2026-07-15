@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "SLO Status \u2014 service-qualified 30d error budgets, ratio-derived burn rates, and active Prometheus alerts.",
+  "description": "SLO Status — service-qualified 30d error budgets, ratio-derived burn rates, and active Prometheus alerts.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -24,6 +24,32 @@
     {
       "title": "Service Overview",
       "url": "/d/service-overview",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": false
+    },
+    {
+      "title": "RED per-service",
+      "type": "dashboards",
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "observability-platform",
+        "red"
+      ],
+      "targetBlank": false
+    },
+    {
+      "title": "Trace Explorer",
+      "url": "/d/trace-explorer",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": false
+    },
+    {
+      "title": "Log Explorer",
+      "url": "/d/log-explorer",
       "type": "link",
       "icon": "external link",
       "targetBlank": false
@@ -53,16 +79,16 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 catalog-service",
+      "title": "catalog-service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
+        "h": 7,
+        "w": 6,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 1,
       "targets": [
@@ -107,16 +133,16 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 inventory-service",
+      "title": "inventory-service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 4,
-        "y": 0
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 1
       },
       "id": 2,
       "targets": [
@@ -161,16 +187,16 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 cart-service",
+      "title": "cart-service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 8,
-        "y": 0
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 1
       },
       "id": 3,
       "targets": [
@@ -215,16 +241,16 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 checkout-service",
+      "title": "checkout-service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 12,
-        "y": 0
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 1
       },
       "id": 4,
       "targets": [
@@ -269,16 +295,16 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 order-service",
+      "title": "order-service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 16,
-        "y": 0
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 8
       },
       "id": 5,
       "targets": [
@@ -323,16 +349,16 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 payment-gateway",
+      "title": "payment-gateway",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 20,
-        "y": 0
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 8
       },
       "id": 6,
       "targets": [
@@ -377,15 +403,15 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 end-to-end-checkout",
+      "title": "end-to-end-checkout",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 0,
+        "h": 7,
+        "w": 8,
+        "x": 16,
         "y": 8
       },
       "id": 12,
@@ -436,7 +462,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 15
       },
       "id": 101,
       "collapsed": false,
@@ -444,7 +470,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Burn rate (5m) \u2014 per service",
+      "title": "Burn rate (5m) — per service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
@@ -560,7 +586,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Burn rate (1h) \u2014 per service",
+      "title": "Burn rate (1h) — per service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
@@ -676,7 +702,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Burn rate (6h) \u2014 per service",
+      "title": "Burn rate (6h) — per service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
@@ -792,7 +818,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Burn rate (1d) \u2014 per service",
+      "title": "Burn rate (1d) — per service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
@@ -930,7 +956,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 33
       },
       "id": 11,
       "targets": [

@@ -53,6 +53,9 @@ grafana.ini:
     allow_sign_up: false
   auth:
     oauth_auto_redirect: false
+  plugins:
+    preinstall_disabled: true
+    plugin_admin_enabled: false
 
 # ---- Sidecars: provisioning ------------------------------------------------
 # Sidecar.datasources watches for ConfigMaps labelled `grafana_datasource` and
@@ -85,11 +88,11 @@ dashboardsSecret: {}
 # ---- Resource limits (sane demo defaults) -----------------------------------
 resources:
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: "1"
+    memory: 1Gi
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 250m
+    memory: 256Mi
 
 # ---- Liveness / readiness ---------------------------------------------------
 livenessProbe:

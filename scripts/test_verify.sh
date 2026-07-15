@@ -95,7 +95,9 @@ while (($#)); do
             shift 2
             ;;
         --data-urlencode)
-            query="$2"
+            if [[ "$2" == query=* ]]; then
+                query="$2"
+            fi
             printf 'data-urlencode=%s\n' "$2" >>"${MOCK_CURL_LOG}"
             shift 2
             ;;
@@ -123,8 +125,9 @@ case "${url}" in
     */loki/api/v1/query_range)
         if [[ "${MOCK_FAILURE:-}" == loki ]]; then
             body='{"status":"error","data":{"result":[]}}'
-        elif [[ "${query}" == *'service_name=~"cart-service|'* ]]; then
-            body='{"status":"success","data":{"resultType":"streams","result":[{"stream":{"service_name":"cart-service"},"values":[["1","log"]]},{"stream":{"service_name":"catalog-service"},"values":[["1","log"]]},{"stream":{"service_name":"checkout-service"},"values":[["1","log"]]},{"stream":{"service_name":"inventory-service"},"values":[["1","log"]]},{"stream":{"service_name":"order-service"},"values":[["1","log"]]},{"stream":{"service_name":"payment-gateway"},"values":[["1","log"]]},{"stream":{"service_name":"synthetic-monitor"},"values":[["1","log"]]},{"stream":{"service_name":"incident-engine"},"values":[["1","log"]]}]}}'
+        elif [[ "${query}" =~ service_name=\"([^\"]+)\" ]]; then
+            service_name="${BASH_REMATCH[1]}"
+            body="{\"status\":\"success\",\"data\":{\"resultType\":\"streams\",\"result\":[{\"stream\":{\"service_name\":\"${service_name}\"},\"values\":[[\"1\",\"log\"]]}]}}"
         elif [[ "${query}" =~ ^query=\{job=\"verify-sh-[0-9]+\"\}$ ]]; then
             body='{"status":"success","data":{"resultType":"streams","result":[{"stream":{"job":"verify"},"values":[["1","hello"]]}]}}'
         else
@@ -193,6 +196,10 @@ case "${url}" in
     */api/dashboards/uid/*)
         uid="${url##*/}"
         body="{\"dashboard\":{\"uid\":\"${uid}\"}}"
+        ;;
+    */__verify_log__)
+        code=404
+        body='404 page not found'
         ;;
     */ready|*/-/ready)
         body='ready'
@@ -363,7 +370,11 @@ run_check 6
 assert_status "${RUN_STATUS}" 0 "Loki push/range-query check passes"
 assert_contains "${TMP_DIR}/curl-6.log" "/loki/api/v1/query_range" "Loki uses the range-query API"
 assert_contains "${TMP_DIR}/curl-6.log" 'data-urlencode=query={job="verify-sh-' "Loki sends LogQL through --data-urlencode"
-assert_contains "${TMP_DIR}/curl-6.log" 'service_name=~"cart-service|' "Loki verifies real container-log identities"
+assert_contains "${TMP_DIR}/curl-6.log" 'service_name="cart-service"' "Loki verifies exact container-log identities"
+assert_contains "${TMP_DIR}/curl-6.log" 'service_name="incident-engine"' "Loki verifies the incident namespace identity"
+assert_status "$(grep -c 'data-urlencode=limit=1' "${TMP_DIR}/curl-6.log")" 16 "Loki queries each product identity independently without a global sample limit"
+assert_contains "${TMP_DIR}/kubectl-6.log" 'port-forward svc/payment-gateway' "Loki verification primes the gateway through its real HTTP boundary"
+assert_contains "${TMP_DIR}/curl-6.log" '/__verify_log__' "Loki verification creates a fresh non-probe payment log"
 
 run_check 6 0 loki
 assert_status "${RUN_STATUS}" 1 "Loki check fails closed on an API error payload"

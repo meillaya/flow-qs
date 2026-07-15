@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Trace Explorer \u2014 search and inspect distributed traces in Tempo. Each span links to matching logs in Loki via the configured tracesToLogsV2 correlation (traceId).",
+  "description": "Trace Explorer — search and inspect distributed traces in Tempo. Each span links to matching logs in Loki via the configured tracesToLogsV2 correlation (traceId).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -26,6 +26,18 @@
       "url": "/d/service-overview",
       "type": "link",
       "icon": "external link",
+      "targetBlank": false
+    },
+    {
+      "title": "RED per-service",
+      "type": "dashboards",
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "observability-platform",
+        "red"
+      ],
       "targetBlank": false
     },
     {
@@ -66,10 +78,10 @@
         "uid": "tempo-observability"
       },
       "gridPos": {
-        "h": 24,
+        "h": 20,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 5
       },
       "id": 1,
       "targets": [
@@ -91,6 +103,22 @@
         "defaults": {},
         "overrides": []
       }
+    },
+    {
+      "type": "text",
+      "title": "How to search",
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Choose a service and status above, then select **Search traces** below. An empty result means no matching traces exist in the selected time range. Generate fresh traffic with `make verify` or `make demo`."
+      },
+      "transparent": false
     }
   ],
   "refresh": "30s",

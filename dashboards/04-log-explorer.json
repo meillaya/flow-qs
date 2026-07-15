@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Log Explorer \u2014 query Loki for log lines with a service label filter. Derived field TraceID links each log line to its Tempo trace.",
+  "description": "Log Explorer — query Loki for log lines with a service label filter. Derived field TraceID links each log line to its Tempo trace.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -40,6 +40,18 @@
       "url": "/d/slo-status",
       "type": "link",
       "icon": "external link",
+      "targetBlank": false
+    },
+    {
+      "title": "RED per-service",
+      "type": "dashboards",
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "observability-platform",
+        "red"
+      ],
       "targetBlank": false
     }
   ],

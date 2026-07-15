@@ -182,7 +182,14 @@ def recording_rules_for_service(slo: dict) -> list[dict]:
 
 
 def build_recording_groups(slos: list[dict]) -> list[dict]:
-    groups: list[dict] = []
+    groups: list[dict] = [{
+        "name": "synthetic_metric_compatibility",
+        "interval": "30s",
+        "rules": [{
+            "record": "synthetic_check_success",
+            "expr": "synthetic_check_success_ratio",
+        }],
+    }]
     for slo in slos:
         groups.append({
             "name": f"sli_recording_rules_{slo['service'].replace('-', '_')}",

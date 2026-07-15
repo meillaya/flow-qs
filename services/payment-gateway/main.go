@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
@@ -60,6 +61,7 @@ func main() {
 	metricRegistry := metrics.NewRegistry("payment-gateway")
 	r.Use(metricRegistry.Middleware)
 	r.Use(otelhttp.NewMiddleware("payment-gateway"))
+	r.Use(requestLogger(logger))
 	r.Get("/healthz", handlers.HealthzHandler)
 	r.Get("/readyz", handlers.ReadyzHandler)
 	r.Get("/metrics", metricRegistry.Handler().ServeHTTP)
@@ -98,6 +100,53 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = httpServer.Shutdown(shutdownCtx)
+}
+
+type requestLogWriter struct {
+	http.ResponseWriter
+	statusCode  int
+	wroteHeader bool
+}
+
+func (w *requestLogWriter) WriteHeader(statusCode int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *requestLogWriter) Write(body []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/healthz" || request.URL.Path == "/readyz" || request.URL.Path == "/metrics" {
+				next.ServeHTTP(response, request)
+				return
+			}
+			wrapped := &requestLogWriter{ResponseWriter: response, statusCode: http.StatusOK}
+			started := time.Now()
+			next.ServeHTTP(wrapped, request)
+			attributes := []any{
+				"method", request.Method,
+				"path", request.URL.Path,
+				"status", wrapped.statusCode,
+				"duration_ms", time.Since(started).Milliseconds(),
+			}
+			spanContext := trace.SpanContextFromContext(request.Context())
+			if spanContext.IsValid() {
+				attributes = append(attributes, "trace_id", spanContext.TraceID().String())
+			}
+			logger.InfoContext(request.Context(), "http request", attributes...)
+		})
+	}
 }
 
 func getEnv(key, fallback string) string {

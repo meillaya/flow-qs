@@ -29,7 +29,16 @@ SERVICES=(
     "payment-gateway         8005"
     "checkout-service-checkout-service 8003"
 )
-PRODUCT_LOG_SERVICES='cart-service|catalog-service|checkout-service|inventory-service|order-service|payment-gateway|synthetic-monitor|incident-engine'
+PRODUCT_LOG_SERVICES=(
+    cart-service
+    catalog-service
+    checkout-service
+    inventory-service
+    order-service
+    payment-gateway
+    synthetic-monitor
+    incident-engine
+)
 
 PASS=0
 FAIL=0
@@ -399,7 +408,18 @@ check_6_loki_logs() {
     kubectl -n "${OBS_NS}" port-forward svc/loki "${loki_pf}:3100" >/dev/null 2>&1 &
     local pid=$!
     track_port_forward "${pid}"
+    local payment_pf
+    payment_pf=$(pick_local_port)
+    kubectl -n "${ECOM_NS}" port-forward svc/payment-gateway \
+        "${payment_pf}:8005" >/dev/null 2>&1 &
+    local payment_pid=$!
+    track_port_forward "${payment_pid}"
     sleep 1
+
+    local payment_prime_code
+    payment_prime_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:${payment_pf}/__verify_log__" 2>/dev/null) || payment_prime_code=000
+    sleep "${VERIFY_LOG_SETTLE_SECONDS:-5}"
 
     local now_ns=$(( $(date +%s) * 1000000000 ))
     local stream_tag="verify-sh-$RANDOM"
@@ -431,31 +451,55 @@ EOF
             || printf 'invalid\t0\n'
     )
 
-    local product_query product_body product_code product_status product_count
-    product_query="{service_namespace=~\"ecom|incident\",service_name=~\"${PRODUCT_LOG_SERVICES}\"}"
-    product_body=$(curl -sS -m 5 -G \
-        --data-urlencode "query=${product_query}" \
-        "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_body=''
-    product_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
-        --data-urlencode "query=${product_query}" \
-        "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_code=000
-    read -r product_status product_count < <(
-        printf '%s' "${product_body}" | jq -er '
-            [
-                .status,
-                (if (.data.result | type) == "array"
-                 then ([.data.result[].stream.service_name] | unique | length)
-                 else error("result is not an array") end)
-            ] | @tsv
-        ' 2>/dev/null || printf 'invalid\t0\n'
-    )
+    local product_code=200 product_status=success product_count=0
+    local product_service product_namespace product_query product_body
+    local service_code service_status service_match
+    local -a missing_services=()
+    for product_service in "${PRODUCT_LOG_SERVICES[@]}"; do
+        product_namespace=ecom
+        [[ "${product_service}" == incident-engine ]] && product_namespace=incident
+        product_query="{service_namespace=\"${product_namespace}\",service_name=\"${product_service}\"}"
+        product_body=$(curl -sS -m 5 -G \
+            --data-urlencode "query=${product_query}" \
+            --data-urlencode "limit=1" \
+            "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_body=''
+        service_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
+            --data-urlencode "query=${product_query}" \
+            --data-urlencode "limit=1" \
+            "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || service_code=000
+        read -r service_status service_match < <(
+            printf '%s' "${product_body}" | jq -er --arg service "${product_service}" '
+                if .status == "success" and (.data.result | type) == "array"
+                then [
+                    .status,
+                    any(.data.result[];
+                        .stream.service_name == $service and
+                        (.values | type) == "array" and
+                        (.values | length) > 0)
+                ] | @tsv
+                else error("invalid Loki range result")
+                end
+            ' 2>/dev/null || printf 'invalid\tfalse\n'
+        )
+        if [[ "${service_code}" =~ ^2[0-9][0-9]$ \
+            && "${service_status}" == success \
+            && "${service_match}" == true ]]; then
+            product_count=$((product_count + 1))
+        else
+            product_code="${service_code}"
+            product_status="${service_status}"
+            missing_services+=("${product_service}")
+        fi
+    done
 
-    stop_port_forwards "${pid}"
+    stop_port_forwards "${pid}" "${payment_pid}"
 
     log "  loki /ready=${ready_code}"
+    log "  payment log prime http=${payment_prime_code}"
     log "  push http=${pcode}  query_range http=${qcode} status=${api_status} results=${result_count}"
-    log "  product logs http=${product_code} status=${product_status} service identities=${product_count}/8"
-    if [[ "${pcode}" =~ ^2[0-9][0-9]$ \
+    log "  product logs http=${product_code} status=${product_status} service identities=${product_count}/8 missing=${missing_services[*]:-none}"
+    if [[ "${payment_prime_code}" == 404 \
+        && "${pcode}" =~ ^2[0-9][0-9]$ \
         && "${qcode}" =~ ^2[0-9][0-9]$ \
         && "${api_status}" == "success" \
         && "${result_count}" =~ ^[0-9]+$ \

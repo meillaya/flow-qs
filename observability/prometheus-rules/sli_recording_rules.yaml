@@ -1,4 +1,10 @@
 groups:
+  - name: synthetic_metric_compatibility
+    interval: 30s
+    rules:
+      - record: synthetic_check_success
+        expr: |
+          synthetic_check_success_ratio
   - name: sli_recording_rules_cart_service
     interval: 30s
     rules:

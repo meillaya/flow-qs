@@ -47,6 +47,16 @@ import yaml
 repo_root = Path(sys.argv[1])
 namespace = runpy.run_path(str(repo_root / "scripts" / "build_prometheus_rules.py"))
 
+compatibility = namespace["build_recording_groups"]([])
+assert compatibility == [{
+    "name": "synthetic_metric_compatibility",
+    "interval": "30s",
+    "rules": [{
+        "record": "synthetic_check_success",
+        "expr": "synthetic_check_success_ratio",
+    }],
+}]
+
 for path in sorted((repo_root / "slo").glob("*.yaml")):
     document = yaml.safe_load(path.read_text())
     for slo in document["slos"]:
@@ -158,7 +168,7 @@ uv run --with pyyaml python "$repo_root/scripts/validate_observability_contract.
   --repo-root "$repo_root" >"$contract_output" 2>&1
 status=$?
 if [[ $status -ne 0 ]] \
-  || ! grep -q '105 recording rules, 48 alert rules, 10 dashboards' "$contract_output"; then
+  || ! grep -q '106 recording rules, 48 alert rules, 10 dashboards' "$contract_output"; then
   cat "$contract_output" >&2
   failures=$((failures + 1))
 fi
