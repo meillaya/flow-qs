@@ -186,24 +186,31 @@ def create_order(payload: OrderCreateRequest) -> dict:
             ).fetchone()
             if existing_charge is not None:
                 raise HTTPException(status_code=409, detail="payment charge already used")
-        conn.execute(
-            """
-            INSERT INTO orders (
-                id, user_id, items, total_cents, status, created_at, payment_charge_id
+        try:
+            conn.execute(
+                """
+                INSERT INTO orders (
+                    id, user_id, items, total_cents, status, created_at, payment_charge_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order_id,
+                    payload.user_id,
+                    json.dumps(items),
+                    payload.total_cents,
+                    status,
+                    created_at,
+                    payment_charge_id,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                order_id,
-                payload.user_id,
-                json.dumps(items),
-                payload.total_cents,
-                status,
-                created_at,
-                payment_charge_id,
-            ),
-        )
-        conn.commit()
+            conn.commit()
+        except sqlite3.IntegrityError as exc:
+            if payment_charge_id is not None and "payment_charge_id" in str(exc):
+                raise HTTPException(
+                    status_code=409, detail="payment charge already used"
+                ) from exc
+            raise
 
     return {
         "id": order_id,

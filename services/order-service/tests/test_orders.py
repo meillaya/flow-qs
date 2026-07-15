@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import grpc
 import pytest
 from fastapi.testclient import TestClient
@@ -248,6 +250,24 @@ def test_create_order_rejects_replayed_charge(
     replay = client.post("/orders", json={**payload, "user_id": "attacker"})
     assert replay.status_code == 409
     assert replay.json() == {"detail": "payment charge already used"}
+    assert len(client.get("/orders").json()) == 1
+
+
+
+def test_create_order_rejects_concurrent_charge_replays(client: TestClient) -> None:
+    payload = {
+        "user_id": "u1",
+        "items": [{"sku": "SKU-001", "qty": 1}],
+        "total_cents": 5000,
+        "payment_charge_id": "ch-concurrent",
+        "payment_order_id": "payment-order-1",
+    }
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        responses = list(executor.map(lambda _: client.post("/orders", json=payload), range(20)))
+
+    assert [response.status_code for response in responses].count(201) == 1
+    assert [response.status_code for response in responses].count(409) == 19
     assert len(client.get("/orders").json()) == 1
 
 
