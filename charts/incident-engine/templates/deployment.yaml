@@ -50,6 +50,8 @@ spec:
               value: "none"
             - name: OTEL_LOGS_EXPORTER
               value: "otlp"
+            - name: OTEL_SEMCONV_STABILITY_OPT_IN
+              value: "http"
             - name: OTEL_EXPORTER_OTLP_LOGS_TIMEOUT
               value: "2"
             - name: CHAOS_NAMESPACE

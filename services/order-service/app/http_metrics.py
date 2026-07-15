@@ -57,7 +57,6 @@ class HTTPMetrics:
                     instrument_name="http.server.request.duration",
                     aggregation=ExplicitBucketHistogramAggregation(EXPLICIT_BOUNDARIES),
                     attribute_keys={
-                        "service_name",
                         "http_response_status_code",
                         "http_route",
                     },
@@ -70,7 +69,6 @@ class HTTPMetrics:
             unit="s",
             description="Inbound HTTP request duration",
         )
-        self._service_name = service_name
         self._shutdown = False
 
     async def middleware(
@@ -93,7 +91,6 @@ class HTTPMetrics:
         self._histogram.record(
             duration_seconds,
             {
-                "service_name": self._service_name,
                 "http_response_status_code": str(status_code),
                 "http_route": route_template,
             },

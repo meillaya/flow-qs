@@ -55,6 +55,8 @@ spec:
               value: "otlp"
             - name: OTEL_LOGS_EXPORTER
               value: "otlp"
+            - name: OTEL_SEMCONV_STABILITY_OPT_IN
+              value: "http"
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               valueFrom:

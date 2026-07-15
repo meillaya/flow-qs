@@ -18,6 +18,10 @@ loki:
     path_prefix: /loki
     replication_factor: 1
 
+  ingester:
+    wal:
+      enabled: false
+
   storage:
     type: filesystem
     filesystem:

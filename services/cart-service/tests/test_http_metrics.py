@@ -40,7 +40,6 @@ def test_http_metrics_records_canonical_histogram_with_route_template(monkeypatc
     assert point.sum >= 0
     assert point.explicit_bounds == EXPLICIT_BOUNDARIES
     assert point.attributes == {
-        "service_name": "test-service",
         "http_response_status_code": "503",
         "http_route": "/widgets/{widget_id}",
     }

@@ -31,6 +31,8 @@ while IFS=',' read -r release namespace chart image_key; do
   helm template "$release" "$chart" --namespace "$namespace" \
     --set-string "$image_key=$immutable_tag" >"$tmp/$release"
   grep -q ":$immutable_tag" "$tmp/$release"
+  grep -q 'name: OTEL_SEMCONV_STABILITY_OPT_IN' "$tmp/$release"
+  grep -A1 'name: OTEL_SEMCONV_STABILITY_OPT_IN' "$tmp/$release" | grep -Eq 'value: "?http"?'
   if grep -Eq 'image:.*:dev(["[:space:]]|$)' "$tmp/$release"; then
     echo "$release retained a mutable dev application image" >&2
     exit 1
@@ -187,6 +189,7 @@ grep -q 'port: 9093' "$tmp/alertmanager-service"
 awk 'BEGIN { RS="---" } /kind: Service/ && /name: loki/ { print }' \
   "$tmp/loki" >"$tmp/loki-service"
 grep -q 'port: 3100' "$tmp/loki-service"
+grep -A2 '^[[:space:]]*wal:' "$tmp/loki" | grep -q 'enabled: false'
 
 grep -q 'url: http://prometheus.observability:80' "$tmp/grafana-inputs"
 grep -q 'url: http://tempo.observability:3200' "$tmp/grafana-inputs"
