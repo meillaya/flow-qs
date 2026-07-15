@@ -69,6 +69,7 @@ def static_context() -> object:
         metrics=[
             MetricSnapshot(name="error_rate", value=0.42, timestamp="2026-07-09T21:00:00+00:00"),
             MetricSnapshot(name="latency_p99", value=1.7, timestamp="2026-07-09T21:00:00+00:00"),
+            MetricSnapshot(name="invalid", value=float("nan"), timestamp="2026-07-09T21:00:00+00:00"),
         ],
     )
 
@@ -458,10 +459,25 @@ async def test_webhook_handles_resolve_status(temp_paths, static_context) -> Non
         incident_id = first["incidents"][0]
         second = client.post("/webhook", json=resolved_payload.model_dump()).json()
         assert second["accepted"] == 1
+        delayed_alert = resolved_alert.model_copy(
+            update={"endsAt": "2026-07-09T21:05:00+00:00"}
+        )
+        client.post(
+            "/webhook",
+            json=AlertmanagerPayload(
+                version="4", status="resolved", alerts=[delayed_alert]
+            ).model_dump(),
+        )
         detail = client.get(f"/incidents/{incident_id}").json()
 
     assert detail["status"] == "resolved"
-    assert detail["ends_at"] is not None
+    assert detail["ends_at"] == resolved_alert.endsAt
+    resolution_events = [
+        event
+        for event in detail["timeline"]
+        if event["source"] == "alertmanager" and "resolved" in event["message"]
+    ]
+    assert len(resolution_events) == 1
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import math
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -367,6 +368,10 @@ async def _process_alert_serialized(
         timeline_events = [TimelineEvent(**event) for event in existing.timeline]
         markdown = render_postmortem(existing, timeline_events)
         return existing, timeline_events, markdown
+    if is_resolved and existing is not None and existing.ends_at:
+        previous_ends_at = parse_iso(existing.ends_at)
+        if ends_at is None or ends_at < previous_ends_at:
+            ends_at = previous_ends_at
 
     now = datetime.now(UTC)
     lookback_end = min(ends_at or now, now)
@@ -384,7 +389,13 @@ async def _process_alert_serialized(
         lookback_end,
         trace_ids=[trace.trace_id for trace in traces],
     )
-    metrics_snapshots = await state.context.fetch_metrics(service, lookback_start, lookback_end)
+    metrics_snapshots = [
+        snapshot
+        for snapshot in await state.context.fetch_metrics(
+            service, lookback_start, lookback_end
+        )
+        if math.isfinite(snapshot.value)
+    ]
 
     experiments = (
         await state.chaos.list_active(service, correlation_starts_at)
@@ -417,6 +428,16 @@ async def _process_alert_serialized(
         existing.updated_at = now
         existing.ends_at = ends_at.isoformat() if ends_at else existing.ends_at
         previous_events = [TimelineEvent(**event) for event in existing.timeline]
+        if is_resolved:
+            previous_events = [
+                event
+                for event in previous_events
+                if not (
+                    event.source == "alertmanager"
+                    and event.details.get("alertname") == alertname
+                    and "resolved" in event.message
+                )
+            ]
         unique_events = {
             (event.timestamp, event.source, event.message): event
             for event in [*previous_events, *timeline_events]

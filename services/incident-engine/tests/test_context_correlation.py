@@ -42,6 +42,30 @@ async def test_fetches_tempo_contract_and_exact_trace_correlated_loki_log() -> N
                 "startTimeUnixNano": "1783751446172507001",
                 "durationMs": "NaN",
             },
+            {
+                "traceID": "0" * 32,
+                "rootServiceName": "checkout-service",
+                "startTimeUnixNano": "1783751446172507001",
+                "durationMs": 1,
+            },
+            {
+                "traceID": "1" * 33,
+                "rootServiceName": "checkout-service",
+                "startTimeUnixNano": "1783751446172507001",
+                "durationMs": 1,
+            },
+            {
+                "traceID": "cafebabe",
+                "rootServiceName": "checkout-service",
+                "startTimeUnixNano": "1783751446172507001",
+                "durationMs": -1,
+            },
+            {
+                "traceID": "feedface",
+                "rootServiceName": "checkout-service",
+                "startTimeUnixNano": "-1",
+                "durationMs": 1,
+            },
             {"rootServiceName": "checkout-service", "startTimeUnixNano": "1783751446"},
         ]
     }
@@ -108,7 +132,11 @@ async def test_fetches_checkout_synthetic_prometheus_value_without_invalid_escap
                 {
                     "metric": {"service": "checkout-service-checkout-service.ecom:8003"},
                     "values": [[1783751446, "0"]],
-                }
+                },
+                {
+                    "metric": {"service": "checkout-service-checkout-service.ecom:8003"},
+                    "values": [[1783751446, "NaN"]],
+                },
             ]
         return httpx.Response(200, json={"data": {"result": result}})
 
@@ -121,6 +149,7 @@ async def test_fetches_checkout_synthetic_prometheus_value_without_invalid_escap
             snapshots = await context.fetch_metrics("checkout-service", start, end)
 
     assert all(r"\-" not in query for query in observed_queries)
+    assert len(snapshots) == 1
     assert snapshots[0].name == "synthetic_check_success"
     assert snapshots[0].value == 0
 

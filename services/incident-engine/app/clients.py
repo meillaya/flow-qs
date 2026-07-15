@@ -121,17 +121,21 @@ class HTTPXUpstreamContext:
                 continue
             raw_trace_id = trace.get("traceID") or trace.get("traceId")
             if not isinstance(raw_trace_id, str) or not re.fullmatch(
-                r"[a-fA-F0-9]{1,64}", raw_trace_id
+                r"[a-fA-F0-9]{1,32}", raw_trace_id
             ):
+                continue
+            if int(raw_trace_id, 16) == 0:
                 continue
             try:
                 trace_id = raw_trace_id.zfill(32)
                 raw_root = trace.get("rootServiceName")
                 root = raw_root if isinstance(raw_root, str) else ""
                 duration_ms = float(trace.get("durationMs") or 0)
-                if not math.isfinite(duration_ms):
+                if not math.isfinite(duration_ms) or duration_ms < 0:
                     continue
                 start_time_ns = int(trace.get("startTimeUnixNano") or 0)
+                if start_time_ns < 0:
+                    continue
                 start_iso = (
                     datetime.fromtimestamp(
                         start_time_ns / 1_000_000_000, tz=UTC
@@ -234,17 +238,31 @@ class HTTPXUpstreamContext:
             except (httpx.HTTPError, ValueError) as exc:
                 logger.warning("prometheus fetch failed (%s): %s", name, exc)
                 continue
-            results = (data.get("data") or {}).get("result") or []
+            if not isinstance(data, dict):
+                continue
+            payload = data.get("data")
+            if not isinstance(payload, dict):
+                continue
+            results = payload.get("result") or []
+            if not isinstance(results, list):
+                continue
             for series in results:
+                if not isinstance(series, dict):
+                    continue
                 metric_labels = series.get("metric") or {}
                 values = series.get("values") or []
-                if not values:
+                if not isinstance(metric_labels, dict) or not isinstance(values, list) or not values:
                     continue
                 # Pick the value closest to the alert start.
-                _, raw_value = values[len(values) // 2]
+                sample = values[len(values) // 2]
+                if not isinstance(sample, list) or len(sample) != 2:
+                    continue
+                _, raw_value = sample
                 try:
                     value = float(raw_value)
                 except (TypeError, ValueError):
+                    continue
+                if not math.isfinite(value):
                     continue
                 snapshots.append(
                     MetricSnapshot(
