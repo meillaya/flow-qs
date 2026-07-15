@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 os.environ["INCIDENT_ENGINE_DISABLE_OTEL"] = "1"
 
-from app.clients import LogHit, MetricSnapshot, TraceHit  # noqa: E402
+from app.clients import LogHit, MetricSnapshot, StaticUpstreamContext, TraceHit  # noqa: E402
 from app.main import (  # noqa: E402
     AlertmanagerAlert,
     AlertmanagerPayload,
@@ -65,7 +65,9 @@ def static_context() -> object:
     )
 
 
-def _make_alert(alertname: str = "HighErrorRate", service: str = "cart-service") -> AlertmanagerAlert:
+def _make_alert(
+    alertname: str = "HighErrorRate", service: str = "cart-service"
+) -> AlertmanagerAlert:
     """Build a minimal Alertmanager alert object."""
     return AlertmanagerAlert(
         status="firing",
@@ -81,6 +83,20 @@ def _make_alert(alertname: str = "HighErrorRate", service: str = "cart-service")
         generatorURL="http://prometheus.example/graph?test=1",
         fingerprint=f"{alertname}-{service}-2026-07-09T21:00:00Z",
     )
+
+
+class FailingUpstreamContext(StaticUpstreamContext):
+    def __init__(self, fail_service: str | None) -> None:
+        super().__init__()
+        self.fail_service = fail_service
+
+    async def fetch_traces(
+        self, service: str, start: datetime, end: datetime, limit: int = 10
+    ) -> list[TraceHit]:
+        del start, end, limit
+        if service == self.fail_service:
+            raise RuntimeError("trace backend unavailable")
+        return []
 
 
 def test_alert_parsing_extracts_labels() -> None:
@@ -135,10 +151,14 @@ def test_timeline_includes_alert_traces_logs_and_metrics() -> None:
         service="cart-service",
         alertname="HighErrorRate",
         traces=[
-            TraceHit(trace_id="t1", root_service="cart-service", start_time="2026-07-09T21:00:00+00:00")
+            TraceHit(
+                trace_id="t1", root_service="cart-service", start_time="2026-07-09T21:00:00+00:00"
+            )
         ],
         logs=[LogHit(timestamp="2026-07-09T21:00:01+00:00", line="hi")],
-        metrics=[MetricSnapshot(name="error_rate", value=0.5, timestamp="2026-07-09T21:00:30+00:00")],
+        metrics=[
+            MetricSnapshot(name="error_rate", value=0.5, timestamp="2026-07-09T21:00:30+00:00")
+        ],
     )
     timestamps = [event.timestamp for event in events]
     assert timestamps == sorted(timestamps)
@@ -149,9 +169,24 @@ def test_timeline_includes_alert_traces_logs_and_metrics() -> None:
 def test_correlate_chaos_matches_target_or_window() -> None:
     """correlate_chaos returns experiments that match the service or window."""
     experiments = [
-        {"name": "pod-kill", "kind": "PodChaos", "target": "cart-service", "start_time": "2026-07-09T20:58:00+00:00"},
-        {"name": "net-delay", "kind": "NetworkChaos", "target": "order-service", "start_time": "2026-07-09T19:00:00+00:00"},
-        {"name": "stale-random", "kind": "StressChaos", "target": "catalog-service", "start_time": "2026-07-09T17:00:00+00:00"},
+        {
+            "name": "pod-kill",
+            "kind": "PodChaos",
+            "target": "cart-service",
+            "start_time": "2026-07-09T20:58:00+00:00",
+        },
+        {
+            "name": "net-delay",
+            "kind": "NetworkChaos",
+            "target": "order-service",
+            "start_time": "2026-07-09T19:00:00+00:00",
+        },
+        {
+            "name": "stale-random",
+            "kind": "StressChaos",
+            "target": "catalog-service",
+            "start_time": "2026-07-09T17:00:00+00:00",
+        },
     ]
     alert_starts_at = datetime(2026, 7, 9, 21, 0, 0, tzinfo=UTC)
     correlated = correlate_chaos("cart-service", experiments, alert_starts_at)
@@ -320,6 +355,64 @@ async def test_webhook_sends_optional_notification(temp_paths, static_context, m
     url, body = static_context.webhook_calls[0]  # type: ignore[attr-defined]
     assert url == "http://example.test/notify"
     assert body["alertname"] == "NotifyAlert"
+
+
+def test_webhook_returns_503_when_alert_cannot_be_persisted(
+    temp_paths: dict[str, str],
+) -> None:
+    context = FailingUpstreamContext(fail_service="cart-service")
+    store = IncidentStore(temp_paths["db"], temp_paths["postmortems"])
+    app = create_app(context=context, store=store)
+    payload = AlertmanagerPayload(
+        version="4", status="firing", alerts=[_make_alert("BrokenAlert", "cart-service")]
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/webhook", json=payload.model_dump())
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "alert processing failed"}
+    assert store.list_all() == []
+
+
+def test_webhook_retry_is_idempotent_and_notifies_only_after_batch_is_durable(
+    temp_paths: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("INCIDENT_WEBHOOK_URL", "http://example.test/notify")
+    context = FailingUpstreamContext(fail_service="order-service")
+    store = IncidentStore(temp_paths["db"], temp_paths["postmortems"])
+    app = create_app(context=context, store=store)
+    payload = AlertmanagerPayload(
+        version="4",
+        status="firing",
+        alerts=[
+            _make_alert("CartAlert", "cart-service"),
+            _make_alert("OrderAlert", "order-service"),
+        ],
+    )
+
+    with TestClient(app) as client:
+        first = client.post("/webhook", json=payload.model_dump())
+        first_records = store.list_all()
+        first_webhook_calls = list(context.webhook_calls)
+        context.fail_service = None
+        second = client.post("/webhook", json=payload.model_dump())
+
+    assert first.status_code == 503
+    assert len(first_records) == 1
+    assert first_webhook_calls == []
+    first_identity = (first_records[0].id, first_records[0].created_at)
+    assert len(context.webhook_calls) == 2
+    assert {call[1]["alertname"] for call in context.webhook_calls} == {
+        "CartAlert",
+        "OrderAlert",
+    }
+    assert second.status_code == 200
+    assert second.json()["accepted"] == 2
+    final_records = store.list_all()
+    assert len(final_records) == 2
+    replayed = next(record for record in final_records if record.id == first_identity[0])
+    assert replayed.created_at == first_identity[1]
 
 
 @pytest.mark.asyncio
