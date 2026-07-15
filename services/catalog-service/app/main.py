@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from opentelemetry import trace
 
 from app.db import check_connection, create_product, get_product, list_products, search_products
+from app.http_metrics import HTTPMetrics
 from app.instrumentation import configure_tracing, instrument_app
 from app.models import Product, ProductCreate
 from app.seed import seed_if_empty
@@ -21,10 +22,15 @@ tracer = trace.get_tracer(SERVICE_NAME)
 async def lifespan(app: FastAPI):
     """Seed the database on application startup."""
     seed_if_empty()
-    yield
+    try:
+        yield
+    finally:
+        http_metrics.shutdown()
 
 
 app = FastAPI(title="Catalog Service", version="0.1.0", lifespan=lifespan)
+http_metrics = HTTPMetrics(SERVICE_NAME)
+app.middleware("http")(http_metrics.middleware)
 instrument_app(app)
 
 

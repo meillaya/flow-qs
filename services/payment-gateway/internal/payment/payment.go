@@ -3,10 +3,12 @@ package payment
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
@@ -15,12 +17,14 @@ import (
 // ThresholdAmountCents is the maximum amount that is auto-approved.
 const ThresholdAmountCents int64 = 100000
 
+// ErrInvalidCharge identifies rejected charge input at transport boundaries.
+var ErrInvalidCharge = errors.New("invalid charge")
+
 // Charge represents a persisted charge record.
 type Charge struct {
 	ChargeID    string
 	OrderID     string
 	AmountCents int64
-	CardToken   string
 	Status      paymentv1.Status
 }
 
@@ -72,7 +76,11 @@ func DecideStatus(amountCents int64) paymentv1.Status {
 }
 
 // Charge creates a new charge and stores it.
-func (s *Store) Charge(orderID string, amountCents int64, cardToken string) *Charge {
+func (s *Store) Charge(orderID string, amountCents int64, cardToken string) (*Charge, error) {
+	if strings.TrimSpace(orderID) == "" || amountCents <= 0 || strings.TrimSpace(cardToken) == "" {
+		return nil, ErrInvalidCharge
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -81,11 +89,10 @@ func (s *Store) Charge(orderID string, amountCents int64, cardToken string) *Cha
 		ChargeID:    chargeID,
 		OrderID:     orderID,
 		AmountCents: amountCents,
-		CardToken:   cardToken,
 		Status:      DecideStatus(amountCents),
 	}
 	s.charges[chargeID] = c
-	return c
+	return c, nil
 }
 
 // Get returns a charge by ID or nil if missing.

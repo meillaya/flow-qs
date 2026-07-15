@@ -67,8 +67,9 @@ The upstream API calls are mocked with `respx` and `StaticUpstreamContext`.
 ## Build and push
 
 ```bash
-docker build -t localhost:38053/incident-engine:dev .
-docker push localhost:38053/incident-engine:dev
+IMAGE_TAG=<immutable-tag>
+docker build -t "localhost:38053/incident-engine:${IMAGE_TAG}" .
+docker push "localhost:38053/incident-engine:${IMAGE_TAG}"
 ```
 
 ## Deploy

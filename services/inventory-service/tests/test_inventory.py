@@ -6,6 +6,7 @@ import asyncio
 import sqlite3
 
 import grpc
+import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
@@ -97,9 +98,7 @@ def test_concurrent_reservation_race() -> None:
     _set_stock("SKU-001", available=10, reserved=0)
 
     async def reserve_one(client: AsyncClient) -> int:
-        response = await client.post(
-            "/inventory/SKU-001/reserve", json={"quantity": 1}
-        )
+        response = await client.post("/inventory/SKU-001/reserve", json={"quantity": 1})
         return response.status_code
 
     async def _run() -> list[int]:
@@ -132,16 +131,42 @@ def test_grpc_reserve_and_release() -> None:
     with TestClient(app):
         channel = grpc.insecure_channel("localhost:50051")
         stub = inventory_pb2_grpc.InventoryServiceStub(channel)
-        reserve = stub.ReserveStock(
-            inventory_pb2.ReserveRequest(sku="SKU-005", quantity=5)
-        )
+        reserve = stub.ReserveStock(inventory_pb2.ReserveRequest(sku="SKU-005", quantity=5))
         assert reserve.success is True
         assert reserve.available == 95
         assert reserve.reserved == 5
 
-        release = stub.ReleaseStock(
-            inventory_pb2.ReleaseRequest(sku="SKU-005", quantity=5)
-        )
+        release = stub.ReleaseStock(inventory_pb2.ReleaseRequest(sku="SKU-005", quantity=5))
         assert release.success is True
         assert release.available == 100
         assert release.reserved == 0
+
+
+@pytest.mark.parametrize("quantity", [0, -1])
+def test_grpc_reserve_rejects_nonpositive_quantity(quantity: int) -> None:
+    _set_stock("SKU-006", available=17, reserved=3)
+
+    with TestClient(app), grpc.insecure_channel("localhost:50051") as channel:
+        stub = inventory_pb2_grpc.InventoryServiceStub(channel)
+        with pytest.raises(grpc.RpcError) as captured:
+            stub.ReserveStock(inventory_pb2.ReserveRequest(sku="SKU-006", quantity=quantity))
+
+    assert captured.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert captured.value.details() == "quantity must be positive"
+    stock = db.get_inventory("SKU-006")
+    assert (stock["available"], stock["reserved"]) == (17, 3)
+
+
+@pytest.mark.parametrize("quantity", [0, -1])
+def test_grpc_release_rejects_nonpositive_quantity(quantity: int) -> None:
+    _set_stock("SKU-007", available=17, reserved=3)
+
+    with TestClient(app), grpc.insecure_channel("localhost:50051") as channel:
+        stub = inventory_pb2_grpc.InventoryServiceStub(channel)
+        with pytest.raises(grpc.RpcError) as captured:
+            stub.ReleaseStock(inventory_pb2.ReleaseRequest(sku="SKU-007", quantity=quantity))
+
+    assert captured.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert captured.value.details() == "quantity must be positive"
+    stock = db.get_inventory("SKU-007")
+    assert (stock["available"], stock["reserved"]) == (17, 3)

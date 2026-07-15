@@ -4,6 +4,7 @@ Domain types are intentionally small - this service orchestrates other
 services, it does not own the source of truth for cart / inventory / payment /
 order state.
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -25,12 +26,14 @@ class CartView(BaseModel):
 
 class Reservation(BaseModel):
     """A single inventory reservation, used to roll back on failure."""
+
     sku: str
     quantity: int
 
 
 class PaymentCharge(BaseModel):
     """A successful payment charge, used to roll back (refund) on failure."""
+
     charge_id: str
     order_id: str
     amount_cents: int
@@ -40,7 +43,7 @@ class PaymentCharge(BaseModel):
 class OrderView(BaseModel):
     id: str
     user_id: str
-    status: str
+    status: Literal["pending", "paid"]
     total_cents: int
 
 

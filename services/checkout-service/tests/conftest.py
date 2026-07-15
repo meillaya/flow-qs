@@ -5,6 +5,7 @@ each test can decide what the downstreams return. We also set up OTel with an
 in-memory span exporter so tests can assert on trace propagation without
 running a Collector.
 """
+
 from __future__ import annotations
 
 import os
@@ -165,6 +166,7 @@ class FakeOrderClient:
     def __init__(self) -> None:
         self.created: list[dict[str, Any]] = []
         self.fail: bool = False
+        self.status = "paid"
         self._next_id = 1
 
     async def create_order(self, payload: dict[str, Any]) -> Any:
@@ -175,7 +177,7 @@ class FakeOrderClient:
         order = OrderView(
             id=f"o-{self._next_id}",
             user_id=payload["user_id"],
-            status="pending",
+            status=self.status,
             total_cents=payload["total_cents"],
         )
         self._next_id += 1

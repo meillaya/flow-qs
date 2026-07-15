@@ -14,6 +14,7 @@ Trace propagation:
   * We expose the trace_id in the response body AND in the X-Trace-Id header
     so curl + Tempo verification is straightforward.
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,6 +34,7 @@ from .clients import (
     HttpxOrderClient,
 )
 from .config import settings
+from .http_metrics import HTTPMetrics
 from .models import CheckoutRequest, CheckoutResponse, CheckoutStatus
 from .orchestrator import CheckoutError, CheckoutOrchestrator
 from .otel import init_tracing
@@ -54,6 +56,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await _inventory.aclose()
         await _payment.aclose()
         await _order.aclose()
+        http_metrics.shutdown()
 
 
 app = FastAPI(
@@ -62,6 +65,8 @@ app = FastAPI(
     description="Saga-style checkout orchestrator with rollback and failure injection.",
     lifespan=lifespan,
 )
+http_metrics = HTTPMetrics(settings.service_name)
+app.middleware("http")(http_metrics.middleware)
 
 # Singleton clients. They are closed on shutdown so gRPC channels don't leak.
 _cart = HttpxCartClient()

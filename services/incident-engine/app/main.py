@@ -67,6 +67,7 @@ def _incident_webhook_url() -> str:
     """Read the incident webhook URL at request time (so tests can override it)."""
     return os.getenv("INCIDENT_WEBHOOK_URL", "")
 
+
 # ---------------------------------------------------------------------------
 # Pydantic models for the Alertmanager webhook payload
 # ---------------------------------------------------------------------------
@@ -115,9 +116,18 @@ class WebhookResponse(BaseModel):
 class AppState:
     """Container for objects whose lifetime matches the FastAPI app."""
 
-    def __init__(self) -> None:
-        self.store = IncidentStore(default_db_path(), default_postmortem_dir())
-        self.context: UpstreamContext = StaticUpstreamContext()  # placeholder
+    def __init__(
+        self,
+        *,
+        store: IncidentStore | None = None,
+        context: UpstreamContext | None = None,
+    ) -> None:
+        self.store = (
+            store
+            if store is not None
+            else IncidentStore(default_db_path(), default_postmortem_dir())
+        )
+        self.context: UpstreamContext = context if context is not None else StaticUpstreamContext()
         self.client: httpx.AsyncClient | None = None
         self.chaos: ChaosSource | None = None
         self._background_task: asyncio.Task[None] | None = None
@@ -209,12 +219,8 @@ def create_app(
     @asynccontextmanager
     async def _custom_lifespan(app_ref: FastAPI) -> AsyncIterator[None]:
         """Lifecycle that honours explicit overrides for tests."""
-        state = AppState()
-        if store is not None:
-            state.store = store
-        if context is not None:
-            state.context = context
-        else:
+        state = AppState(store=store, context=context)
+        if context is None:
             client = httpx.AsyncClient(timeout=10.0)
             state.client = client
             state.context = HTTPXUpstreamContext(
@@ -223,7 +229,9 @@ def create_app(
                 prom_url=PROM_URL,
                 client=client,
             )
-        state.chaos = chaos_source or KubernetesChaosClient.from_cluster() or RegisteredChaosSource()
+        state.chaos = (
+            chaos_source or KubernetesChaosClient.from_cluster() or RegisteredChaosSource()
+        )
         state._meter_provider = _setup_otel_metrics()
         state._background_task = asyncio.create_task(_resolve_reconciler(state))
         await asyncio.sleep(0)
@@ -265,7 +273,9 @@ def get_state(request: Request) -> AppState:
 # ---------------------------------------------------------------------------
 
 
-def _parse_alert(alert: AlertmanagerAlert) -> tuple[str, str, str, str, datetime, datetime | None, str]:
+def _parse_alert(
+    alert: AlertmanagerAlert,
+) -> tuple[str, str, str, str, datetime, datetime | None, str]:
     """Extract (alertname, service, severity, slo, starts_at, ends_at, fingerprint) from an alert."""
     labels = alert.labels
     alertname = labels.get("alertname") or "UnknownAlert"
@@ -428,24 +438,29 @@ def register_routes(app: FastAPI) -> None:
         return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/webhook", response_model=WebhookResponse)
-    async def webhook(payload: AlertmanagerPayload, state: Annotated[AppState, Depends(get_state)]) -> WebhookResponse:
+    async def webhook(
+        payload: AlertmanagerPayload, state: Annotated[AppState, Depends(get_state)]
+    ) -> WebhookResponse:
         """Accept an Alertmanager webhook payload and create incidents."""
         if not payload.alerts:
             return WebhookResponse(accepted=0, incidents=[], postmortems=[])
 
         accepted_ids: list[str] = []
         postmortem_paths: list[str] = []
+        processed_records: list[IncidentRecord] = []
         for alert in payload.alerts:
             try:
                 record, _events, _markdown = await _process_alert(state, alert, payload.status)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.exception("alert processing failed: %s", exc)
-                continue
+            except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK
+                logger.exception("alert processing failed")
+                raise HTTPException(status_code=503, detail="alert processing failed") from exc
             accepted_ids.append(record.id)
             postmortem_paths.append(record.file_path)
+            processed_records.append(record)
 
-            incident_webhook = _incident_webhook_url()
-            if incident_webhook:
+        incident_webhook = _incident_webhook_url()
+        if incident_webhook:
+            for record in processed_records:
                 await state.context.notify_webhook(
                     incident_webhook,
                     {
@@ -465,7 +480,9 @@ def register_routes(app: FastAPI) -> None:
         )
 
     @app.get("/incidents")
-    async def list_incidents(state: Annotated[AppState, Depends(get_state)]) -> list[dict[str, Any]]:
+    async def list_incidents(
+        state: Annotated[AppState, Depends(get_state)],
+    ) -> list[dict[str, Any]]:
         """Return a summary list of every incident in storage."""
         records = state.store.list_all()
         summaries: list[dict[str, Any]] = []
@@ -475,7 +492,9 @@ def register_routes(app: FastAPI) -> None:
         return summaries
 
     @app.get("/incidents/{incident_id}")
-    async def get_incident(incident_id: str, state: Annotated[AppState, Depends(get_state)]) -> dict[str, Any]:
+    async def get_incident(
+        incident_id: str, state: Annotated[AppState, Depends(get_state)]
+    ) -> dict[str, Any]:
         """Return a single incident + its postmortem markdown body."""
         record = state.store.get(incident_id)
         if record is None:

@@ -27,3 +27,9 @@ quantity.  There is no integration with catalog pricing.
 
 The container is started with `opentelemetry-instrument`, which auto-instruments
 FastAPI and `requests` using the installed instrumentation packages.
+
+User-facing requests also emit the explicit `http.server.request.duration`
+histogram over OTLP. Its Prometheus-normalized family is
+`http_server_request_duration_seconds_*`, labelled by `service_name`,
+`http_response_status_code`, and the low-cardinality `http_route` template.
+Health, readiness, and metrics probes are excluded.

@@ -141,7 +141,7 @@ def _make_capture_transport(
                 json={
                     "id": "o-1",
                     "user_id": "alice",
-                    "status": "pending",
+                    "status": "paid",
                     "total_cents": 1000,
                 },
             )

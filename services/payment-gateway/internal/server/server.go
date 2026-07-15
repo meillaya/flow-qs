@@ -3,9 +3,12 @@ package server
 
 import (
 	"context"
+	"errors"
 
 	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
 	"github.com/example/payment-gateway/internal/payment"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // PaymentServer implements payment.v1.PaymentService.
@@ -21,7 +24,13 @@ func NewPaymentServer(store *payment.Store) *PaymentServer {
 
 // Charge processes a charge request.
 func (s *PaymentServer) Charge(_ context.Context, req *paymentv1.ChargeRequest) (*paymentv1.ChargeResponse, error) {
-	c := s.store.Charge(req.OrderId, req.AmountCents, req.CardToken)
+	c, err := s.store.Charge(req.OrderId, req.AmountCents, req.CardToken)
+	if errors.Is(err, payment.ErrInvalidCharge) {
+		return nil, status.Error(codes.InvalidArgument, "invalid charge")
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "charge failed")
+	}
 	return &paymentv1.ChargeResponse{
 		ChargeId: c.ChargeID,
 		Status:   c.Status,

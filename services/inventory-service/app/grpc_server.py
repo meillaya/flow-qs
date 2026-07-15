@@ -54,6 +54,10 @@ class InventoryServicer(inventory_pb2_grpc.InventoryServiceServicer):
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details("SKU not found")
             return inventory_pb2.ReserveResponse()
+        except ValueError:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("quantity must be positive")
+            return inventory_pb2.ReserveResponse()
 
     async def ReleaseStock(
         self,
@@ -74,4 +78,8 @@ class InventoryServicer(inventory_pb2_grpc.InventoryServiceServicer):
         except KeyError:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details("SKU not found")
+            return inventory_pb2.ReleaseResponse()
+        except ValueError:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("quantity must be positive")
             return inventory_pb2.ReleaseResponse()

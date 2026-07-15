@@ -54,6 +54,23 @@ def test_metrics_is_prometheus_text_not_json(tmp_path, monkeypatch) -> None:
     assert "# HELP" in response.text
 
 
+def test_create_app_with_store_override_never_constructs_default_store(
+    tmp_path, monkeypatch
+) -> None:
+    def default_path_must_not_be_read() -> Path:
+        raise AssertionError("default store path was read")
+
+    monkeypatch.setattr(main, "default_db_path", default_path_must_not_be_read)
+    store = IncidentStore(tmp_path / "override.db", tmp_path / "postmortems")
+
+    app = main.create_app(context=StaticUpstreamContext(), store=store)
+
+    with TestClient(app) as client:
+        response = client.get("/healthz")
+    assert response.status_code == 200
+    assert app.state.app_state.store is store
+
+
 def test_reconciler_uses_the_lifespan_owned_meter_provider(tmp_path, monkeypatch) -> None:
     calls = {"get_meter": 0, "create_counter": 0}
     monkeypatch.setenv("INCIDENT_DB_PATH", str(tmp_path / "default.db"))
