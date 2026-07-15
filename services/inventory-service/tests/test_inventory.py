@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from typing import Protocol, runtime_checkable
 
 import grpc
 import pytest
@@ -14,6 +15,13 @@ import app.grpc_gen.inventory_pb2 as inventory_pb2
 import app.grpc_gen.inventory_pb2_grpc as inventory_pb2_grpc
 from app import db
 from app.main import app
+
+
+@runtime_checkable
+class RpcStatus(Protocol):
+    def code(self) -> grpc.StatusCode: ...
+
+    def details(self) -> str: ...
 
 
 def _set_stock(sku: str, available: int, reserved: int) -> None:
@@ -151,6 +159,7 @@ def test_grpc_reserve_rejects_nonpositive_quantity(quantity: int) -> None:
         with pytest.raises(grpc.RpcError) as captured:
             stub.ReserveStock(inventory_pb2.ReserveRequest(sku="SKU-006", quantity=quantity))
 
+    assert isinstance(captured.value, RpcStatus)
     assert captured.value.code() == grpc.StatusCode.INVALID_ARGUMENT
     assert captured.value.details() == "quantity must be positive"
     stock = db.get_inventory("SKU-006")
@@ -166,6 +175,7 @@ def test_grpc_release_rejects_nonpositive_quantity(quantity: int) -> None:
         with pytest.raises(grpc.RpcError) as captured:
             stub.ReleaseStock(inventory_pb2.ReleaseRequest(sku="SKU-007", quantity=quantity))
 
+    assert isinstance(captured.value, RpcStatus)
     assert captured.value.code() == grpc.StatusCode.INVALID_ARGUMENT
     assert captured.value.details() == "quantity must be positive"
     stock = db.get_inventory("SKU-007")
