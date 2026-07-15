@@ -10,3 +10,15 @@
 **/.ruff_cache/
 **/*.egg-info/
 **/orders.db
+
+# Terraform working data and local state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

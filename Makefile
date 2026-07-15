@@ -10,19 +10,24 @@ OBS_NS             := observability
 ECOM_NS            := ecom
 
 SERVICES := \
-    incident-engine,incident,charts/incident-engine \
-    cart-service,ecom,charts/cart-service \
-    catalog-service,ecom,charts/catalog-service \
-    inventory-service,ecom,charts/inventory-service \
-    order-service,ecom,charts/order-service \
-    payment-gateway,ecom,charts/payment-gateway \
-    checkout-service,ecom,charts/checkout-service \
-    synthetic-monitor,ecom,charts/synthetic-monitor
+    incident-engine,incident,charts/incident-engine,image.tag \
+    cart-service,ecom,charts/cart-service,image.tag \
+    catalog-service,ecom,charts/catalog-service,svc-template.image.tag \
+    inventory-service,ecom,charts/inventory-service,image.tag \
+    order-service,ecom,charts/order-service,image.tag \
+    payment-gateway,ecom,charts/payment-gateway,image.tag \
+    checkout-service,ecom,charts/checkout-service,image.tag \
+    synthetic-monitor,ecom,charts/synthetic-monitor,svc-template.image.tag
 
 OBS_RELEASES := otel-collector tempo loki prometheus grafana
 IMAGE_SERVICES := cart-service catalog-service checkout-service incident-engine \
     inventory-service order-service payment-gateway synthetic-monitor
-IMAGE_TAG := dev
+IMAGE_TAG ?= git-$(shell git rev-parse --verify HEAD)
+PROMETHEUS_CHART_VERSION := 29.16.0
+GRAFANA_CHART_VERSION := 12.7.2
+LOKI_CHART_VERSION := 18.5.0
+TEMPO_CHART_VERSION := 2.2.3
+CHAOS_MESH_CHART_VERSION := 2.8.3
 HELM ?= helm
 PYTHON_SERVICES := services/cart-service services/catalog-service \
     services/checkout-service services/incident-engine services/inventory-service \
@@ -34,7 +39,7 @@ LOCAL_CHARTS := $(sort $(patsubst %/Chart.yaml,%,$(wildcard \
 
 .PHONY: help up down verify clean clean-runtime demo lint lint-chart test validate-infra \
         build-push-images \
-        cluster-up cluster-down cluster-list \
+        cluster-up cluster-down cluster-list cluster-smoke \
         helm-repos helm-add-repos helm-obs helm-chaos helm-services kubectl-wait
 
 help: ## Show available targets
@@ -61,7 +66,7 @@ up: cluster-up helm-add-repos ## Bring up everything: cluster + observability st
 	@echo "==> Stack is up. Run 'make verify' to validate."
 
 cluster-up: ## Provision k3d cluster + namespaces via Terraform
-	terraform -chdir=$(TF_DIR) init -upgrade
+	terraform -chdir=$(TF_DIR) init -input=false
 	terraform -chdir=$(TF_DIR) apply -auto-approve
 
 cluster-down: ## Tear down k3d cluster via Terraform (kept for symmetry)
@@ -74,8 +79,28 @@ cluster-list: ## Show k3d clusters + Kubernetes nodes
 	@echo "Kubernetes nodes:"
 	@KUBECONFIG=$(KUBECONFIG) kubectl get nodes -o wide 2>/dev/null || true
 
+cluster-smoke: ## Opt-in lifecycle gate for the repo-owned k3d 5.9/K3s 1.35 compatibility caveat
+	@set -euo pipefail; \
+	test "$${ACK_UNTESTED_K3D_K3S_PAIRING:-}" = 1 || { \
+	    echo 'Refusing: k3d 5.9 does not publish a K3s 1.35 compatibility guarantee.' >&2; \
+	    echo 'Run only on a disposable host with ACK_UNTESTED_K3D_K3S_PAIRING=1.' >&2; \
+	    exit 2; \
+	}; \
+	if k3d cluster list 2>/dev/null | awk -v expected='$(CLUSTER_NAME)' '$$1 == expected {found=1} END {exit !found}'; then \
+	    echo 'Refusing to smoke-test over an existing project cluster.' >&2; exit 2; \
+	fi; \
+	trap '$(MAKE) --no-print-directory clean-runtime' EXIT; \
+	$(MAKE) --no-print-directory cluster-up; \
+	KUBECONFIG=$(KUBECONFIG) kubectl wait node --all --for=condition=Ready --timeout=5m; \
+	test "$$(KUBECONFIG=$(KUBECONFIG) kubectl get nodes --no-headers | wc -l)" -eq 3; \
+	KUBECONFIG=$(KUBECONFIG) kubectl rollout status deployment/coredns -n kube-system --timeout=2m; \
+	echo 'k3d 5.9.0 / K3s 1.35.6 repo-owned lifecycle smoke passed.'
+
 build-push-images: ## Build and push all current service images to the local registry
 	@set -euo pipefail; \
+	git diff --quiet -- services docker-bake.hcl || { echo 'ERROR: commit service changes before building immutable images' >&2; exit 1; }; \
+	git diff --cached --quiet -- services docker-bake.hcl || { echo 'ERROR: commit staged service changes before building immutable images' >&2; exit 1; }; \
+	test -z "$$(git ls-files --others --exclude-standard -- services docker-bake.hcl)" || { echo 'ERROR: commit untracked service changes before building immutable images' >&2; exit 1; }; \
 	test "$$(docker inspect --format '{{.State.Running}}' $(REGISTRY_NAME))" = true; \
 	registry_port=$$(docker inspect --format '{{(index (index .NetworkSettings.Ports "5000/tcp") 0).HostPort}}' $(REGISTRY_NAME)); \
 	[[ "$$registry_port" =~ ^[0-9]+$$ ]]; \
@@ -90,11 +115,11 @@ build-push-images: ## Build and push all current service images to the local reg
 helm-add-repos: helm-repos ## Add + update all required Helm repos (idempotent)
 	@helm repo update
 
-helm-repos: ## helm repo add (idempotent, || true is intentional)
-	@helm repo add open-telemetry        https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null || true
-	@helm repo add prometheus-community  https://prometheus-community.github.io/helm-charts          2>/dev/null || true
-	@helm repo add grafana               https://grafana.github.io/helm-charts                       2>/dev/null || true
-	@helm repo add chaos-mesh            https://charts.chaos-mesh.org                              2>/dev/null || true
+helm-repos: ## Add or refresh the required upstream Helm repositories
+	@helm repo add --force-update open-telemetry        https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null
+	@helm repo add --force-update prometheus-community  https://prometheus-community.github.io/helm-charts          2>/dev/null
+	@helm repo add --force-update grafana               https://grafana-community.github.io/helm-charts             2>/dev/null
+	@helm repo add --force-update chaos-mesh            https://charts.chaos-mesh.org                              2>/dev/null
 
 helm-obs: ## Install/upgrade the observability stack
 	@set -euo pipefail; \
@@ -107,31 +132,33 @@ _helm-obs:
 	    --namespace $(OBS_NS) --create-namespace --wait --timeout 3m
 	@echo "  -> tempo"
 	@KUBECONFIG=$(KUBECONFIG) helm upgrade --install tempo grafana/tempo \
-	    --namespace $(OBS_NS) --create-namespace \
+	    --namespace $(OBS_NS) --create-namespace --version $(TEMPO_CHART_VERSION) \
 	    -f infra/tempo/helm-values.yaml --wait --timeout 3m
 	@echo "  -> loki"
 	@KUBECONFIG=$(KUBECONFIG) helm upgrade --install loki grafana/loki \
-	    --namespace $(OBS_NS) --create-namespace \
+	    --namespace $(OBS_NS) --create-namespace --version $(LOKI_CHART_VERSION) \
 	    -f infra/loki/helm-values.yaml --wait --timeout 3m
 	@echo "  -> preparing Prometheus config and rule ConfigMaps"
 	@KUBECONFIG=$(KUBECONFIG) kubectl apply -f infra/prometheus/configmap.yaml
 	@KUBECONFIG=$(KUBECONFIG) kubectl apply -k observability/prometheus-rules
 	@echo "  -> prometheus (+ kube-state-metrics + alertmanager subchart)"
 	@KUBECONFIG=$(KUBECONFIG) helm upgrade --install prometheus prometheus-community/prometheus \
-	    --namespace $(OBS_NS) --create-namespace \
+	    --namespace $(OBS_NS) --create-namespace --version $(PROMETHEUS_CHART_VERSION) \
 	    -f infra/prometheus/helm-values.yaml --wait --timeout 5m
 	@echo "  -> preparing Grafana datasource and dashboard ConfigMaps"
 	@KUBECONFIG=$(KUBECONFIG) kubectl apply -k infra/grafana
 	@KUBECONFIG=$(KUBECONFIG) kubectl apply -k dashboards
 	@echo "  -> grafana"
 	@KUBECONFIG=$(KUBECONFIG) helm upgrade --install grafana grafana/grafana \
-	    --namespace $(OBS_NS) --create-namespace \
+	    --namespace $(OBS_NS) --create-namespace --version $(GRAFANA_CHART_VERSION) \
 	    -f infra/grafana/helm-values.yaml --wait --timeout 3m
 
 helm-chaos: ## Install/upgrade Chaos Mesh and its RBAC
 	@KUBECONFIG=$(KUBECONFIG) helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh \
-	    --namespace chaos-testing --create-namespace --version 2.7.0 \
+	    --namespace chaos-testing --create-namespace --version $(CHAOS_MESH_CHART_VERSION) \
 	    --set controllerManager.serviceAccount=rbac \
+	    --set controllerManager.enableCtrlServer=false \
+	    --set dashboard.service.type=ClusterIP \
 	    --set chaosDaemon.runtime=containerd \
 	    --set chaosDaemon.socketPath=/run/k3s/containerd/containerd.sock \
 	    --set rbac.create=true --wait --timeout 5m
@@ -139,15 +166,12 @@ helm-chaos: ## Install/upgrade Chaos Mesh and its RBAC
 helm-services: ## Install/upgrade all application services in ecom
 	@set -euo pipefail; \
 	for record in $(SERVICES); do \
-	    IFS=',' read -r release ns chart <<< "$$record"; \
+	    IFS=',' read -r release ns chart image_key <<< "$$record"; \
 	    echo "  -> $$release (chart=$$chart, ns=$$ns)"; \
 	    KUBECONFIG=$(KUBECONFIG) helm upgrade --install "$$release" "$$chart" \
-	        --namespace "$$ns" --create-namespace --wait --timeout 3m; \
-	done; \
-	KUBECONFIG=$(KUBECONFIG) kubectl rollout restart deployment/synthetic-monitor \
-	    --namespace $(ECOM_NS); \
-	KUBECONFIG=$(KUBECONFIG) kubectl rollout status deployment/synthetic-monitor \
-	    --namespace $(ECOM_NS) --timeout=3m
+	        --namespace "$$ns" --create-namespace \
+	        --set-string "$$image_key=$(IMAGE_TAG)" --wait --timeout 3m; \
+	done
 
 kubectl-wait: ## kubectl wait for all deployments to be Available
 	@set -euo pipefail; \
@@ -155,6 +179,10 @@ kubectl-wait: ## kubectl wait for all deployments to be Available
 	    echo "Waiting for Deployments in $$ns..."; \
 	    KUBECONFIG=$(KUBECONFIG) kubectl wait --for=condition=Available deployment --all \
 	        --namespace "$$ns" --timeout=5m; \
+	done; \
+	echo "Waiting for observability DaemonSets..."; \
+	for daemonset in $$(KUBECONFIG=$(KUBECONFIG) kubectl get daemonset -n observability -o name); do \
+	    KUBECONFIG=$(KUBECONFIG) kubectl rollout status "$$daemonset" -n observability --timeout=5m; \
 	done; \
 	echo "Waiting for observability StatefulSets..."; \
 	statefulset_names=$$(KUBECONFIG=$(KUBECONFIG) kubectl get statefulset \
@@ -176,7 +204,7 @@ down: clean-runtime ## Tear down all project runtime resources
 helm-uninstall-all: ## helm uninstall every observability release + every service release
 	@set -uo pipefail; \
 	for record in $(SERVICES); do \
-	    IFS=',' read -r release ns _ <<< "$$record"; \
+	    IFS=',' read -r release ns _ _ <<< "$$record"; \
 	    echo "  x uninstalling $$release from $$ns"; \
 	    KUBECONFIG=$(KUBECONFIG) helm uninstall "$$release" -n "$$ns" --ignore-not-found 2>/dev/null || true; \
 	done; \
@@ -205,36 +233,14 @@ clean: clean-runtime ## Remove runtime resources, Terraform state, and local art
 	@echo "Clean complete."
 
 clean-runtime: ## Idempotently remove project releases, cluster, and registry
-	@set -euo pipefail; \
-	if command -v k3d >/dev/null 2>&1 && \
-	   k3d cluster list 2>/dev/null | grep -q '^$(CLUSTER_NAME)\b'; then \
-	    if [ -f "$(KUBECONFIG)" ] && \
-	       KUBECONFIG=$(KUBECONFIG) kubectl cluster-info --request-timeout=5s >/dev/null 2>&1; then \
-	        make --no-print-directory helm-uninstall-all; \
-	    fi; \
-	fi; \
-	if [ -s "$(TF_DIR)/terraform.tfstate" ]; then \
-	    terraform -chdir=$(TF_DIR) init -input=false; \
-	    terraform -chdir=$(TF_DIR) destroy -auto-approve; \
-	fi; \
-	if command -v k3d >/dev/null 2>&1 && \
-	   k3d cluster list 2>/dev/null | grep -q '^$(CLUSTER_NAME)\b'; then \
-	    k3d cluster delete $(CLUSTER_NAME); \
-	fi; \
-	if command -v k3d >/dev/null 2>&1 && \
-	   k3d registry list 2>/dev/null | grep -q '^$(REGISTRY_NAME)\b'; then \
-	    k3d registry delete $(REGISTRY_NAME); \
-	fi; \
-	rm -f "$(KUBECONFIG)"
+	@CLUSTER_NAME=$(CLUSTER_NAME) REGISTRY_NAME=$(REGISTRY_NAME) TF_DIR=$(TF_DIR) \
+	 KUBECONFIG=$(KUBECONFIG) bash infra/cluster/clean-runtime.sh
 
 validate-infra: ## Validate rendered deployment contracts without cluster access
 	@bash infra/validate-rendered.sh
 
 demo: ## End-to-end demo: load (100 VUs) → chaos → wait → postmortem (~10 min)
 	@bash scripts/demo.sh
-
-demo-fallback: ## Run only the fallback path of the demo (no k6 / chaos)
-	@DEMO_FORCE_FALLBACK=1 bash scripts/demo.sh
 
 lint-chart: ## Lint all local Helm charts
 	@set -euo pipefail; \

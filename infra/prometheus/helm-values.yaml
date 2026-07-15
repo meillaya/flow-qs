@@ -6,10 +6,9 @@
 ##     -f infra/prometheus/helm-values.yaml --create-namespace
 ##
 ## Design notes:
-## - Retention 15d is longer than Tempo/Loki (7d) because Prometheus metrics are
+## - Retention 31d is longer than Tempo/Loki (7d) because Prometheus metrics are
 ##   cheap and the SLO multi-window burn-rate math (Task 15/16) benefits from a
-##   15d window (slow-burn rules need at least 1h × 30d = 30d, but for the demo
-##   15d is sufficient).
+##   31d window covers the full 30d SLO evaluation window).
 ## - `server.configMapOverrideName` defers the full Prometheus config to
 ##   `infra/prometheus/configmap.yaml`, which is applied independently.
 ## - Alertmanager config is inlined under `alertmanager.config`; the equivalent
@@ -20,11 +19,11 @@
 
 server:
   fullnameOverride: prometheus
-  retention: "15d"
+  retention: "31d"
   extraFlags:
     - web.enable-remote-write-receiver
   persistentVolume:
-    size: 10Gi
+    size: 20Gi
 
   global:
     scrape_interval: 15s

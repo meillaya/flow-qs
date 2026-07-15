@@ -6,12 +6,9 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cd "$root"
 
-sed -n '/^clean-runtime:/,/^$/p' Makefile >"$tmp/clean"
 grep -q '^clean: clean-runtime' Makefile
-grep -q 'helm-uninstall-all' "$tmp/clean"
-grep -q 'terraform -chdir=.* destroy' "$tmp/clean"
-grep -q 'k3d cluster delete' "$tmp/clean"
-grep -q 'k3d registry delete' "$tmp/clean"
+bash infra/test-platform-contracts.sh
+bash infra/cluster/test-clean-runtime.sh
 
 sed -n '/resource "null_resource" "k3d_cluster"/,/resource "null_resource" "namespaces"/p' \
   infra/cluster/main.tf >"$tmp/k3d-cluster"
@@ -29,9 +26,23 @@ synthetic-monitor'
 records=$(sed -n '/^SERVICES :=/,/^$/s/^    \([^,]*\),.*/\1/p' Makefile)
 test "$records" = "$expected"
 
+immutable_tag=git-0123456789abcdef0123456789abcdef01234567
+while IFS=',' read -r release namespace chart image_key; do
+  helm template "$release" "$chart" --namespace "$namespace" \
+    --set-string "$image_key=$immutable_tag" >"$tmp/$release"
+  grep -q ":$immutable_tag" "$tmp/$release"
+  if grep -Eq 'image:.*:dev(["[:space:]]|$)' "$tmp/$release"; then
+    echo "$release retained a mutable dev application image" >&2
+    exit 1
+  fi
+done < <(sed -n '/^SERVICES :=/,/^$/s/^    \([^ ]*\).*/\1/p' Makefile | sed 's/[[:space:]]*\\$//')
+grep -q 'prometheus.io/scrape: "true"' "$tmp/payment-gateway"
+grep -q 'prometheus.io/port: "8005"' "$tmp/payment-gateway"
+grep -q 'prometheus.io/path: "/metrics"' "$tmp/payment-gateway"
+
 sed -n '/^helm-services:/,/^$/p' Makefile >"$tmp/helm-services"
-grep -q 'rollout restart deployment/synthetic-monitor' "$tmp/helm-services"
-grep -q 'rollout status deployment/synthetic-monitor' "$tmp/helm-services"
+grep -q -- "--set-string \"\$\$image_key=\$(IMAGE_TAG)\"" "$tmp/helm-services"
+if grep -q 'rollout restart deployment/synthetic-monitor' "$tmp/helm-services"; then exit 1; fi
 
 sed -n '/^lint-chart:/,/^$/p' Makefile >"$tmp/lint-chart"
 grep -q '^lint-chart:' "$tmp/lint-chart"
@@ -100,35 +111,58 @@ for service in expected:
     assert target["tags"] == [f"localhost:5000/{service}:dev"]
 PY
 
-helm template prometheus prometheus-community/prometheus \
+helm template prometheus prometheus-community/prometheus --version 29.16.0 \
   --namespace observability -f infra/prometheus/helm-values.yaml >"$tmp/prometheus"
 helm template otel-collector ./infra/otel-collector/helm \
   --namespace observability >"$tmp/otel-collector"
+awk '/^collectorConfig: \|/{flag=1; next} /^agent:/{flag=0} flag{sub(/^  /, ""); print}' \
+  infra/otel-collector/helm/values.yaml >"$tmp/otel-gateway-config.yaml"
+awk '/^agentCollectorConfig: \|/{flag=1; next} /^nodeSelector:/{flag=0} flag{sub(/^  /, ""); print}' \
+  infra/otel-collector/helm/values.yaml >"$tmp/otel-agent-config.yaml"
+for config in "$tmp"/otel-*-config.yaml; do
+  docker run --rm --entrypoint /otelcol-contrib \
+    -v "$config:/etc/otelcol-contrib/config.yaml:ro" \
+    otel/opentelemetry-collector-contrib:0.104.0 validate \
+    --config=/etc/otelcol-contrib/config.yaml
+done
 helm template synthetic-monitor charts/synthetic-monitor \
   --namespace ecom >"$tmp/synthetic-monitor"
 helm template chaos-mesh chaos-mesh/chaos-mesh \
-  --namespace chaos-testing --version 2.7.0 \
+  --namespace chaos-testing --version 2.8.3 \
   --set controllerManager.serviceAccount=rbac \
+  --set controllerManager.enableCtrlServer=false \
+  --set dashboard.service.type=ClusterIP \
   --set chaosDaemon.runtime=containerd \
   --set chaosDaemon.socketPath=/run/k3s/containerd/containerd.sock \
   --set rbac.create=true >"$tmp/chaos-mesh"
 helm template tempo grafana/tempo \
-  --namespace observability -f infra/tempo/helm-values.yaml >"$tmp/tempo"
+  --version 2.2.3 --namespace observability -f infra/tempo/helm-values.yaml >"$tmp/tempo"
 helm template loki grafana/loki \
-  --namespace observability -f infra/loki/helm-values.yaml >"$tmp/loki"
+  --version 18.5.0 --namespace observability -f infra/loki/helm-values.yaml >"$tmp/loki"
+helm template grafana grafana/grafana \
+  --version 12.7.2 --namespace observability -f infra/grafana/helm-values.yaml >"$tmp/grafana"
 kubectl kustomize infra/grafana >"$tmp/grafana-inputs"
+
+test "$(helm show chart grafana/grafana --version 12.7.2 | awk '/^appVersion:/{gsub(/"/, "", $2); print $2}')" = 13.1.0
+test "$(helm show chart grafana/loki --version 18.5.0 | awk '/^appVersion:/{gsub(/"/, "", $2); print $2}')" = 3.7.3
+test "$(helm show chart grafana/tempo --version 2.2.3 | awk '/^appVersion:/{gsub(/"/, "", $2); print $2}')" = 2.10.7
+test "$(helm show chart prometheus-community/prometheus --version 29.16.0 | awk '/^appVersion:/{gsub(/"/, "", $2); sub(/^v/, "", $2); print $2}')" = 3.13.1
 
 awk 'BEGIN { RS="---" } /kind: Service/ && /name: prometheus/ { print }' \
   "$tmp/prometheus" >"$tmp/prometheus-service"
 grep -q 'port: 80' "$tmp/prometheus-service"
 grep -q 'endpoint: http://prometheus.observability:80/api/v1/write' \
-  infra/otel-collector/configmap.yaml
-grep -q 'endpoint: http://prometheus.observability:80/api/v1/write' \
   infra/otel-collector/helm/values.yaml
 grep -q 'endpoint: http://prometheus.observability:80/api/v1/write' \
   "$tmp/otel-collector"
+awk 'BEGIN { RS="---" } /kind: DaemonSet/ && /filelog-agent/ { print }' \
+  "$tmp/otel-collector" >"$tmp/otel-agent"
+grep -q 'GOMEMLIMIT' "$tmp/otel-agent"
+grep -q 'path: /var/log/pods' "$tmp/otel-agent"
+if grep -q 'hostPort:' "$tmp/otel-agent"; then exit 1; fi
+test "$(grep -c '^kind: Service$' "$tmp/otel-collector")" -eq 1
 if grep -q 'prometheus.observability:9090/api/v1/write' \
-  infra/otel-collector/configmap.yaml infra/otel-collector/helm/values.yaml \
+  infra/otel-collector/helm/values.yaml \
   "$tmp/otel-collector"; then
   exit 1
 fi

@@ -41,7 +41,7 @@ if postmortem_matches_remote "${wrong_service}"; then exit 1; fi
 if postmortem_matches_remote "${wrong_chaos}"; then exit 1; fi
 if postmortem_matches_remote "${missing_correlation}"; then exit 1; fi
 
-env -u KUBECONFIG helm show crds chaos-mesh/chaos-mesh --version 2.7.0 \
+env -u KUBECONFIG helm show crds chaos-mesh/chaos-mesh --version 2.8.3 \
   >"${TMP}/crds.yaml"
 yq 'select(.kind == "CustomResourceDefinition" and .spec.names.kind == "NetworkChaos") | .spec.versions[] | select(.name == "v1alpha1") | .schema.openAPIV3Schema' \
   "${TMP}/crds.yaml" >"${TMP}/networkchaos_v1alpha1.json"

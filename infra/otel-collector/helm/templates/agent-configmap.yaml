@@ -1,0 +1,12 @@
+{{- if .Values.agent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "otel-collector.fullname" . }}-agent-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "otel-collector.labels" . | nindent 4 }}
+data:
+  collector.yaml: |-
+    {{- .Values.agentCollectorConfig | nindent 4 }}
+{{- end }}

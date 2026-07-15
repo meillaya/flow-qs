@@ -2,15 +2,17 @@ NAMESPACE := observability
 RELEASE := loki
 VALUES := infra/loki/helm-values.yaml
 LOKI_URL := http://loki.observability:3100
+CHART_VERSION := 18.5.0
 
 .PHONY: apply reset ready push lint
 
 apply:
-	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo add --force-update grafana https://grafana-community.github.io/helm-charts
 	helm repo update grafana
 	helm upgrade --install $(RELEASE) grafana/loki \
 		--namespace $(NAMESPACE) \
 		--create-namespace \
+		--version $(CHART_VERSION) \
 		--values $(VALUES)
 
 reset:
@@ -18,7 +20,8 @@ reset:
 	kubectl delete pvc -l app.kubernetes.io/name=loki -n $(NAMESPACE) || true
 
 lint:
-	helm lint /tmp/opencode/loki -f $(VALUES)
+	helm template $(RELEASE) grafana/loki --version $(CHART_VERSION) \
+		--namespace $(NAMESPACE) --values $(VALUES) >/dev/null
 
 ready:
 	kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=loki -n $(NAMESPACE) --timeout=120s

@@ -8,18 +8,19 @@ NAMESPACE := observability
 RELEASE   := tempo
 CHART     := grafana/tempo
 VALUES    := helm-values.yaml
+CHART_VERSION := 2.2.3
 
 .PHONY: lint apply reset
 
 lint:
-	@mkdir -p /tmp/tempo-chart
-	helm pull $(CHART) --untar --untardir /tmp/tempo-chart
-	helm lint /tmp/tempo-chart/tempo -f $(VALUES)
+	helm template $(RELEASE) $(CHART) --version $(CHART_VERSION) \
+	  --namespace $(NAMESPACE) -f $(VALUES) >/dev/null
 
 apply:
 	helm upgrade --install $(RELEASE) $(CHART) \
 	  --namespace $(NAMESPACE) \
 	  --create-namespace \
+	  --version $(CHART_VERSION) \
 	  -f $(VALUES) \
 	  --wait --timeout 180s
 

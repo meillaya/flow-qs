@@ -23,6 +23,7 @@
     golangci-lint
     terraform
     kubectl
+    k3d
     kubernetes-helm
     k6
     grpcurl
