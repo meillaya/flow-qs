@@ -17,7 +17,7 @@ pins these external artifacts:
 | Loki chart | `18.5.0` |
 | Tempo chart | `2.2.3` |
 | Chaos Mesh chart | `2.8.3` |
-| k6 | `grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d` |
+| k6 | `grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669` |
 
 Prerequisites are Docker 24 or newer with at least 6 GiB assigned, Nix 2.18 or
 newer, and internet access for the first chart/image pull.
@@ -187,8 +187,9 @@ There is no automatic backup or in-place migration promise.
 `make down` is idempotent and removes project releases, namespaces, the owned
 k3d cluster, registry, containers, network, volumes, kubeconfig, load Jobs,
 and port-forward processes. It refuses to auto-delete an unknown cluster whose
-identity does not match the project contract. `make clean` only removes
-repository-local generated/cache artifacts and is not a cluster teardown.
+identity does not match the project contract. `make clean` performs the same
+ownership-gated runtime teardown and then removes repository-local generated
+and cache artifacts.
 
 ## Troubleshooting
 

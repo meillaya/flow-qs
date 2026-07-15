@@ -120,10 +120,9 @@ workflow_delete="$(grep -n '^delete workflow pod-kill-checkout ' "${TMP}/kubectl
 alert_delete="$(grep -n '^delete podchaos demo-alert-checkout ' "${TMP}/kubectl-calls" | cut -d: -f1)"
 nodes_delete="$(grep -n '^delete workflownode ' "${TMP}/kubectl-calls" | cut -d: -f1)"
 [[ "${workflow_delete}" -lt "${alert_delete}" && "${alert_delete}" -lt "${nodes_delete}" ]]
+grep -q '^delete job k6-load ' "${TMP}/kubectl-calls"
 
 CLEANUP_DONE=0
-CHAOS_APPLIED=0
-ALERT_CHAOS_APPLIED=1
 CLEANUP_WAIT_SECONDS=1
 printf 'stale success\n' >"${SUMMARY_FILE}"
 bounded_kubectl() {

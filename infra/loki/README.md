@@ -11,9 +11,9 @@ make apply
 Or manually:
 
 ```bash
-helm repo add grafana https://grafana.github.io/helm-charts
-helm repo update grafana
-helm upgrade --install loki grafana/loki \
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm repo update grafana-community
+helm upgrade --install loki grafana-community/loki \
   --version 18.5.0 \
   --namespace observability \
   --create-namespace \
@@ -24,7 +24,7 @@ helm upgrade --install loki grafana/loki \
 
 - **Mode**: `SingleBinary` — one pod runs all Loki components. No microservices overhead.
 - **Storage**: `filesystem` on a 10Gi PVC mounted at `/loki`.
-- **Schema**: `v13` with `boltdb-shipper` index store and `filesystem` object store.
+- **Schema**: `v13` with the TSDB index store and `filesystem` object store.
 - **Retention**: `168h` (7 days), enforced by the compactor with the filesystem delete-request store.
 - **Ingestion limits**: `50 MB/s` rate, `100 MB/s` burst.
 - **Auth**: disabled. Loki is reached cluster-internally at `http://loki.observability:3100`.

@@ -10,7 +10,7 @@ namespace; control-plane components are never targeted.
   ```bash
   helm repo add chaos-mesh https://charts.chaos-mesh.org
   helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-testing \
-    --create-namespace --version 2.7.0
+    --create-namespace --version 2.8.3
   kubectl wait --for=condition=ready pod \
     -l app.kubernetes.io/name=chaos-mesh -n chaos-testing --timeout=180s
   ```
@@ -24,7 +24,7 @@ namespace; control-plane components are never targeted.
 | `network-delay-payment.yaml` | Schedule / NetworkChaos | payment-gateway | Adds 2000ms inbound latency every 60s | 5 min per run |
 | `cpu-stress-catalog.yaml` | Schedule / StressChaos | catalog-service | Consumes 80% CPU on 1 pod every 60s | 3 min per run |
 | `dns-chaos-inventory.yaml` | Schedule / DNSChaos | inventory-service | Returns random DNS answers every 60s | 2 min per run |
-| `demo-alert-checkout.yaml` | NetworkChaos | synthetic-monitor → checkout-service | Partitions only the monitoring path for checkout `ServiceDown` | 3 min |
+| `demo-alert-checkout.yaml` | PodChaos | checkout-service | Removes one checkout pod to trigger checkout `ServiceDown` | 3 min |
 
 ### pod-kill-checkout
 
@@ -60,12 +60,11 @@ simulating corrupt DNS responses for two minutes per run.
 
 ### demo-alert-checkout
 
-The strict demo first applies this bounded `NetworkChaos` partition to checkout
-pods with `direction: from` and synthetic-monitor as the peer target. Only
-synthetic-monitor traffic to checkout is blocked; k6 traffic from `load` does
-not match the peer selector. After a fresh checkout `ServiceDown` postmortem
-names this exact NetworkChaos, the demo starts the recurring checkout pod-kill
-Workflow while k6 is still active.
+The strict demo applies this bounded `PodChaos` to one checkout pod while k6 is
+active. The Deployment restores capacity, so the demo observes a partial
+outage rather than accepting total failure. A fresh checkout `ServiceDown`
+postmortem must name this exact experiment before the recurring checkout
+pod-kill Workflow begins.
 
 ## Running experiments
 
@@ -82,7 +81,7 @@ cd chaos && make chaos-all
 ```
 
 Validate all four Task 20 scheduling structures and their exact embedded fault
-specs against pinned Chaos Mesh 2.7.0 CRDs:
+specs against pinned Chaos Mesh 2.8.3 CRDs:
 
 ```bash
 cd chaos && make verify-schedules

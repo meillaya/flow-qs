@@ -375,25 +375,27 @@ EOF
     local ready_code
     ready_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${tempo_pf}/ready" 2>/dev/null) || ready_code=000
     sleep 1
-    local qcode qbody
-    qbody=$(curl -sS -m 5 -G \
-        --data-urlencode "query={ resource.service.name = \"verify.sh\" }" \
-        --data-urlencode "limit=10" \
-        "http://127.0.0.1:${tempo_pf}/api/search" 2>/dev/null)
-    qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
-        --data-urlencode "query={ resource.service.name = \"verify.sh\" }" \
-        --data-urlencode "limit=10" \
-        "http://127.0.0.1:${tempo_pf}/api/search" 2>/dev/null) || qcode=000
+    local qcode qbody trace_match
+    qbody=$(curl -sS -m 5 \
+        "http://127.0.0.1:${tempo_pf}/api/traces/${trace_id}" 2>/dev/null) || qbody=''
+    qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:${tempo_pf}/api/traces/${trace_id}" 2>/dev/null) || qcode=000
+    trace_match=$(printf '%s' "${qbody}" | jq -er --arg trace_id "${trace_id}" '
+        [.. | objects | .traceId? // empty] | any(. == $trace_id)
+    ' 2>/dev/null) || trace_match=false
 
     stop_port_forwards "${otel_pid}" "${tempo_pid}"
 
     log "  otlp push http=${push_code} trace_id=${trace_id}"
-    log "  tempo /ready=${ready_code} /api/search http=${qcode}"
-    log "  tempo search body (head): $(printf '%s' "${qbody}" | head -c 300)"
-    if [[ "${push_code}" =~ ^2[0-9][0-9]$ && "${qcode}" =~ ^2[0-9][0-9]$ ]]; then
+    log "  tempo /ready=${ready_code} /api/traces/${trace_id} http=${qcode} exact_match=${trace_match}"
+    log "  tempo trace body (head): $(printf '%s' "${qbody}" | head -c 300)"
+    if [[ "${push_code}" =~ ^2[0-9][0-9]$ \
+        && "${ready_code}" =~ ^2[0-9][0-9]$ \
+        && "${qcode}" =~ ^2[0-9][0-9]$ \
+        && "${trace_match}" == true ]]; then
         record PASS "5.otel-trace"
     else
-        record FAIL "5.otel-trace" "push=${push_code} search=${qcode}"
+        record FAIL "5.otel-trace" "push=${push_code} ready=${ready_code} trace=${qcode}/${trace_match}"
     fi
 }
 
@@ -416,7 +418,8 @@ check_6_loki_logs() {
     track_port_forward "${payment_pid}"
     sleep 1
 
-    local payment_prime_code
+    local payment_prime_code payment_prime_start_ns
+    payment_prime_start_ns=$(( $(date +%s) * 1000000000 ))
     payment_prime_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' \
         "http://127.0.0.1:${payment_pf}/__verify_log__" 2>/dev/null) || payment_prime_code=000
     sleep "${VERIFY_LOG_SETTLE_SECONDS:-5}"
@@ -452,30 +455,47 @@ EOF
     )
 
     local product_code=200 product_status=success product_count=0
-    local product_service product_namespace product_query product_body
+    local product_service product_namespace product_query product_body product_query_end_ns
     local service_code service_status service_match
+    local -a product_time_args
     local -a missing_services=()
+    product_query_end_ns=$(( $(date +%s) * 1000000000 ))
     for product_service in "${PRODUCT_LOG_SERVICES[@]}"; do
         product_namespace=ecom
         [[ "${product_service}" == incident-engine ]] && product_namespace=incident
         product_query="{service_namespace=\"${product_namespace}\",service_name=\"${product_service}\"}"
+        product_time_args=()
+        if [[ "${product_service}" == payment-gateway ]]; then
+            product_query+=' |= "path=/__verify_log__"'
+            product_time_args=(
+                --data-urlencode "start=${payment_prime_start_ns}"
+                --data-urlencode "end=${product_query_end_ns}"
+            )
+        fi
         product_body=$(curl -sS -m 5 -G \
             --data-urlencode "query=${product_query}" \
             --data-urlencode "limit=1" \
+            "${product_time_args[@]}" \
             "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_body=''
         service_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
             --data-urlencode "query=${product_query}" \
             --data-urlencode "limit=1" \
+            "${product_time_args[@]}" \
             "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || service_code=000
         read -r service_status service_match < <(
-            printf '%s' "${product_body}" | jq -er --arg service "${product_service}" '
+            printf '%s' "${product_body}" | jq -er \
+                --arg service "${product_service}" \
+                --arg marker "path=/__verify_log__" '
                 if .status == "success" and (.data.result | type) == "array"
                 then [
                     .status,
                     any(.data.result[];
                         .stream.service_name == $service and
                         (.values | type) == "array" and
-                        (.values | length) > 0)
+                        (.values | length) > 0 and
+                        ($service != "payment-gateway" or
+                            any(.values[];
+                                (length >= 2) and (.[1] | contains($marker)))))
                 ] | @tsv
                 else error("invalid Loki range result")
                 end
@@ -539,8 +559,8 @@ check_7_prom_metric() {
     done
     sleep 1
 
-    local wave index
-    for wave in 1 2; do
+    local index
+    for _ in 1 2; do
         for index in "${!metric_ports[@]}"; do
             curl -sS -m 3 -o /dev/null \
                 "http://127.0.0.1:${metric_ports[$index]}/__verify_metric__" 2>/dev/null || true

@@ -15,8 +15,17 @@ spec:
         {{- include "incidentengine.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "incidentengine.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: incident-engine
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

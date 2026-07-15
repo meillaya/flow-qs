@@ -10,9 +10,14 @@ DOCKER_BIN=${DOCKER_BIN:-docker}
 KUBECTL_BIN=${KUBECTL_BIN:-kubectl}
 TERRAFORM_BIN=${TERRAFORM_BIN:-terraform}
 MAKE_BIN=${MAKE_BIN:-make}
+HELM_BIN=${HELM_BIN:-helm}
 NETWORK_NAME="k3d-${CLUSTER_NAME}"
 SECONDARY_KUBECONFIG="$HOME/.config/kubeconfig-${CLUSTER_NAME}.yaml"
 DOCKER_ENDPOINT_FORMAT="{{ range \$id, \$_ := .Containers }}{{ \$id }}{{ \"\\n\" }}{{ end }}"
+
+for tool in "$K3D_BIN" "$DOCKER_BIN" "$KUBECTL_BIN" "$TERRAFORM_BIN" "$MAKE_BIN" "$HELM_BIN"; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "Required cleanup tool is unavailable: $tool" >&2; exit 1; }
+done
 
 manifest=$(mktemp "${TMPDIR:-/tmp}/enten-runtime-owned.XXXXXX")
 trap 'rm -f -- "$manifest"' EXIT

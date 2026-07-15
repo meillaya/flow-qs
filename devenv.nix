@@ -51,6 +51,7 @@
   };
 
   enterShell = ''
+    export GOTOOLCHAIN=go1.26.5
     export KUBECONFIG="$HOME/.kube/config-observability"
     echo "Observability Platform dev shell ready"
     echo "KUBECONFIG: $KUBECONFIG"

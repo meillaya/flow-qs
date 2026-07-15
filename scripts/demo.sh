@@ -23,6 +23,7 @@ ALERT_CHAOS_RESOURCE_KIND="${ALERT_CHAOS_RESOURCE_KIND:-podchaos}"
 ALERT_CHAOS_DISPLAY_KIND="${ALERT_CHAOS_DISPLAY_KIND:-PodChaos}"
 EXPECTED_INCIDENT_SERVICE="${EXPECTED_INCIDENT_SERVICE:-checkout-service}"
 EXPECTED_INCIDENT_ALERT="${EXPECTED_INCIDENT_ALERT:-ServiceDown}"
+INCIDENT_POD=""
 EXPECTED_POSTMORTEM_HEADER="# Postmortem — \`${EXPECTED_INCIDENT_ALERT}\` on \`${EXPECTED_INCIDENT_SERVICE}\`"
 EXPECTED_CHAOS_MARKER="**${ALERT_CHAOS_NAME}** (${ALERT_CHAOS_DISPLAY_KIND})"
 PROM_RULES_PATH="${PROM_RULES_PATH:-/api/v1/namespaces/observability/services/http:prometheus:80/proxy/api/v1/rules}"
@@ -46,10 +47,6 @@ POSTMORTEM_OUT_DIR="${DEMO_POSTMORTEM_OUT_DIR:-${REPO_ROOT}/docs/examples/postmo
 POSTMORTEM_OUT="${POSTMORTEM_OUT_DIR}/postmortem-demo-${RUN_ID}.md"
 POSTMORTEM_MARKER="/tmp/demo-${RUN_ID}.marker"
 
-K6_APPLIED=0
-CHAOS_APPLIED=0
-ALERT_CHAOS_APPLIED=0
-INCIDENT_POD=""
 CLEANUP_DONE=0
 ACTIVE_SLEEP_PID=""
 CLEANUP_SCHEDULE_NAMES=""
@@ -77,17 +74,9 @@ cleanup_request() {
 
 collect_cleanup_remaining() {
   local failed=0
-  if [[ "${CHAOS_APPLIED}" -eq 1 ]]; then
-    collect_chaos_remaining || failed=1
-  fi
-  if [[ "${ALERT_CHAOS_APPLIED}" -eq 1 ]]; then
-    bounded_kubectl get "${ALERT_CHAOS_RESOURCE_KIND}" "${ALERT_CHAOS_NAME}" \
-      -n "${CHAOS_NAMESPACE}" --ignore-not-found -o name || failed=1
-  fi
-  if [[ "${K6_APPLIED}" -eq 1 ]]; then
-    bounded_kubectl get job "${K6_JOB_NAME}" -n "${LOAD_NAMESPACE}" \
-      --ignore-not-found -o name || failed=1
-  fi
+  collect_chaos_remaining || failed=1
+  bounded_kubectl get job "${K6_JOB_NAME}" -n "${LOAD_NAMESPACE}" \
+    --ignore-not-found -o name || failed=1
   return "${failed}"
 }
 
@@ -184,20 +173,12 @@ cleanup() {
   fi
   log "cleanup_receipt active_sleep_reaped=${active_sleep_reaped}"
 
-  if [[ "${CHAOS_APPLIED}" -eq 1 ]]; then
-    delete_workflow_tree || cleanup_failed=1
-  fi
-  if [[ "${ALERT_CHAOS_APPLIED}" -eq 1 ]]; then
-    delete_alert_chaos || cleanup_failed=1
-  fi
-  if [[ "${CHAOS_APPLIED}" -eq 1 ]]; then
-    delete_workflow_nodes || cleanup_failed=1
-  fi
-  if [[ "${K6_APPLIED}" -eq 1 ]]; then
-    cleanup_request delete_k6_job delete job "${K6_JOB_NAME}" \
-      -n "${LOAD_NAMESPACE}" --ignore-not-found --cascade=background \
-      --wait=false || cleanup_failed=1
-  fi
+  delete_workflow_tree || cleanup_failed=1
+  delete_alert_chaos || cleanup_failed=1
+  delete_workflow_nodes || cleanup_failed=1
+  cleanup_request delete_k6_job delete job "${K6_JOB_NAME}" \
+    -n "${LOAD_NAMESPACE}" --ignore-not-found --cascade=background \
+    --wait=false || cleanup_failed=1
   local cleanup_deadline=$((SECONDS + CLEANUP_WAIT_SECONDS))
   while (( SECONDS < cleanup_deadline )); do
     if remaining="$(collect_cleanup_remaining 2>/dev/null)"; then
@@ -488,7 +469,6 @@ start_causal_chaos() {
   log "Step 3/8: applying causal checkout PodChaos"
   kubectl apply -f "${ALERT_CHAOS_MANIFEST}" >/dev/null \
     || die "alert chaos manifest apply failed"
-  ALERT_CHAOS_APPLIED=1
   kubectl get "${ALERT_CHAOS_RESOURCE_KIND}" "${ALERT_CHAOS_NAME}" \
     -n "${CHAOS_NAMESPACE}" >/dev/null 2>&1 \
     || die "alert chaos was not admitted"
@@ -501,7 +481,6 @@ start_causal_chaos() {
   log "Step 5/8: starting recurring checkout pod-kill workflow"
   kubectl apply -f "${CHAOS_MANIFEST}" >/dev/null \
     || die "chaos workflow apply failed"
-  CHAOS_APPLIED=1
   kubectl get "${CHAOS_RESOURCE_KIND}" "${CHAOS_NAME}" \
     -n "${CHAOS_NAMESPACE}" >/dev/null 2>&1 \
     || die "chaos workflow was not admitted"
@@ -562,7 +541,6 @@ main() {
   log "Step 2/8: starting k6 load"
   kubectl delete job "${K6_JOB_NAME}" -n "${LOAD_NAMESPACE}" --ignore-not-found >/dev/null
   kubectl apply -f "${K6_LOAD_MANIFEST}" >/dev/null || die "k6 manifest apply failed"
-  K6_APPLIED=1
   k6_pod="$(wait_for_pod_creation "${LOAD_NAMESPACE}" "job-name=${K6_JOB_NAME}" 120)" \
     || die "k6 pod was not created"
   kubectl wait --for=condition=ready "pod/${k6_pod}" \

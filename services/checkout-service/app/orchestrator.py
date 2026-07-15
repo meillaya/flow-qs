@@ -110,7 +110,6 @@ class CheckoutOrchestrator:
         tracer = trace.get_tracer("checkout-service")
         with tracer.start_as_current_span("checkout.run") as span:
             span.set_attribute("checkout.user_id", req.user_id)
-            span.set_attribute("checkout.payment_method", req.payment_method)
 
             # -- failure injection gate --
             if self._inject():

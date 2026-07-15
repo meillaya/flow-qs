@@ -241,6 +241,28 @@ async def test_http_upstream_context_handles_404_and_500(temp_paths) -> None:
 
 
 @pytest.mark.asyncio
+async def test_failed_incident_notification_does_not_log_webhook_secret(caplog) -> None:
+    """A failed secret-bearing webhook request logs no credential material."""
+    from app.clients import HTTPXUpstreamContext
+
+    secret_url = "https://hooks.example.test/services/SECRET/TOKEN?key=PRIVATE"
+    with respx.mock() as mock:
+        mock.post(secret_url).respond(500)
+        async with httpx.AsyncClient() as client:
+            context = HTTPXUpstreamContext(
+                tempo_url="http://tempo.test",
+                loki_url="http://loki.test",
+                prom_url="http://prom.test",
+                client=client,
+            )
+            sent = await context.notify_webhook(secret_url, {"status": "firing"})
+
+    assert sent is False
+    assert "SECRET" not in caplog.text
+    assert "PRIVATE" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_webhook_creates_incident_and_postmortem(temp_paths, static_context) -> None:
     """POST /webhook persists an incident, writes a postmortem, and returns ids."""
     reset_chaos_state()
@@ -336,6 +358,46 @@ async def test_webhook_handles_resolve_status(temp_paths, static_context) -> Non
 
     assert detail["status"] == "resolved"
     assert detail["ends_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_firing_webhook_ignores_alertmanager_zero_ends_at(
+    temp_paths, static_context
+) -> None:
+    """A firing alert's zero ``endsAt`` sentinel must not claim resolution."""
+    reset_chaos_state()
+    alert = _make_alert("StillFiring", "cart-service")
+    alert.endsAt = "0001-01-01T00:00:00Z"
+    payload = AlertmanagerPayload(version="4", status="firing", alerts=[alert])
+    app = create_app(context=static_context)  # type: ignore[arg-type]
+
+    with TestClient(app) as client:
+        response = client.post("/webhook", json=payload.model_dump())
+        incident_id = response.json()["incidents"][0]
+        detail = client.get(f"/incidents/{incident_id}").json()
+
+    assert detail["status"] == "firing"
+    assert detail["ends_at"] is None
+    assert "0001-01-01" not in detail["postmortem"]
+
+
+def test_webhook_rejects_unbounded_alert_batches(temp_paths, static_context) -> None:
+    """Webhook fan-out is bounded before upstream queries or persistence."""
+    app = create_app(context=static_context)  # type: ignore[arg-type]
+    alerts = [
+        _make_alert(f"BatchAlert{index}", "cart-service")
+        for index in range(21)
+    ]
+    payload = {
+        "version": "4",
+        "status": "firing",
+        "alerts": [alert.model_dump() for alert in alerts],
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/webhook", json=payload)
+
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

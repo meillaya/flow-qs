@@ -35,7 +35,7 @@ from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from .chaos import ChaosSource, KubernetesChaosClient
 from .clients import HTTPXUpstreamContext, StaticUpstreamContext, UpstreamContext, parse_iso
@@ -73,30 +73,35 @@ def _incident_webhook_url() -> str:
 # ---------------------------------------------------------------------------
 
 
+LabelKey = Annotated[str, StringConstraints(max_length=253)]
+LabelValue = Annotated[str, StringConstraints(max_length=4096)]
+TimestampText = Annotated[str, StringConstraints(max_length=64)]
+
+
 class AlertmanagerAlert(BaseModel):
     """One element of the ``alerts`` array in the Alertmanager payload."""
 
-    status: str
-    labels: dict[str, str] = Field(default_factory=dict)
-    annotations: dict[str, str] = Field(default_factory=dict)
-    startsAt: str
-    endsAt: str | None = None
-    generatorURL: str | None = None
-    fingerprint: str | None = None
+    status: Annotated[str, StringConstraints(max_length=32)]
+    labels: dict[LabelKey, LabelValue] = Field(default_factory=dict, max_length=64)
+    annotations: dict[LabelKey, LabelValue] = Field(default_factory=dict, max_length=64)
+    startsAt: TimestampText
+    endsAt: TimestampText | None = None
+    generatorURL: Annotated[str, StringConstraints(max_length=2048)] | None = None
+    fingerprint: Annotated[str, StringConstraints(max_length=512)] | None = None
 
 
 class AlertmanagerPayload(BaseModel):
     """Top-level Alertmanager webhook payload."""
 
-    version: str = "4"
-    groupKey: str | None = None
-    status: str
-    receiver: str | None = None
-    groupLabels: dict[str, str] = Field(default_factory=dict)
-    commonLabels: dict[str, str] = Field(default_factory=dict)
-    commonAnnotations: dict[str, str] = Field(default_factory=dict)
-    externalURL: str | None = None
-    alerts: list[AlertmanagerAlert] = Field(default_factory=list)
+    version: Annotated[str, StringConstraints(max_length=16)] = "4"
+    groupKey: Annotated[str, StringConstraints(max_length=1024)] | None = None
+    status: Annotated[str, StringConstraints(max_length=32)]
+    receiver: Annotated[str, StringConstraints(max_length=253)] | None = None
+    groupLabels: dict[LabelKey, LabelValue] = Field(default_factory=dict, max_length=64)
+    commonLabels: dict[LabelKey, LabelValue] = Field(default_factory=dict, max_length=64)
+    commonAnnotations: dict[LabelKey, LabelValue] = Field(default_factory=dict, max_length=64)
+    externalURL: Annotated[str, StringConstraints(max_length=2048)] | None = None
+    alerts: list[AlertmanagerAlert] = Field(default_factory=list, max_length=20)
     truncatedAlerts: int | None = None
 
 
@@ -284,6 +289,8 @@ def _parse_alert(
     slo = labels.get("slo") or labels.get("sli") or ""
     starts_at = parse_iso(alert.startsAt)
     ends_at = parse_iso(alert.endsAt) if alert.endsAt else None
+    if ends_at is not None and ends_at.year == 1:
+        ends_at = None
     fingerprint = alert.fingerprint or f"{alertname}:{service}:{starts_at.isoformat()}"
     return alertname, service, severity, slo, starts_at, ends_at, fingerprint
 
@@ -295,6 +302,9 @@ async def _process_alert(
 ) -> tuple[IncidentRecord, list[TimelineEvent], str]:
     """Process a single alert and return (record, timeline, postmortem_md)."""
     alertname, service, severity, slo, starts_at, ends_at, fingerprint = _parse_alert(alert)
+    is_resolved = payload_status == "resolved" or alert.status == "resolved"
+    if not is_resolved:
+        ends_at = None
 
     lookback_end = ends_at or datetime.now(UTC)
     lookback_start = starts_at - timedelta(minutes=LOOKBACK_MINUTES)
@@ -335,10 +345,7 @@ async def _process_alert(
         chaos_experiments=authoritative_chaos,
     )
 
-    if payload_status == "resolved" or alert.status == "resolved" or ends_at is not None:
-        record_status = "resolved"
-    else:
-        record_status = "firing"
+    record_status = "resolved" if is_resolved else "firing"
 
     now = datetime.now(UTC).isoformat()
     if existing is not None:

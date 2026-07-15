@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # Multi-stage build for checkout-service.
 # Stage 1: build a venv with uv so we get deterministic, cached installs.
 # Stage 2: copy the venv + app code into a slim runtime image.
 
 # -- builder ----------------------------------------------------------------
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim@sha256:c3d81d25b3154142b0b42eb1e61300024426268edeb5b5a26dd7ddf64d9daf28 AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -12,34 +12,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy
 
 # uv is the only build-time dep we need from the network.
-COPY --from=ghcr.io/astral-sh/uv:0.10.4 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 
 WORKDIR /build
 
 # Layer 1: dependencies only. This stays cached when only app code changes.
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv /build/.venv && \
-    uv pip install --python /build/.venv/bin/python \
-        "fastapi>=0.111.0" \
-        "uvicorn[standard]>=0.30.0" \
-        "httpx>=0.27.0" \
-        "grpcio>=1.64.0" \
-        "protobuf>=5.27.0" \
-        "opentelemetry-api>=1.27.0" \
-        "opentelemetry-sdk>=1.27.0" \
-        "opentelemetry-instrumentation-fastapi>=0.48b0" \
-        "opentelemetry-instrumentation-httpx>=0.48b0" \
-        "opentelemetry-instrumentation-grpc>=0.48b0" \
-        "opentelemetry-exporter-otlp>=1.27.0" \
-        "opentelemetry-distro>=0.48b0" \
-        "pydantic>=2.7.0"
+    uv sync --frozen --no-dev --no-install-project
 
 # Layer 2: app source includes the committed generated and typed gRPC stubs.
 COPY app ./app
 
 # -- runtime ----------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:c3d81d25b3154142b0b42eb1e61300024426268edeb5b5a26dd7ddf64d9daf28 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

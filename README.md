@@ -22,7 +22,7 @@ A Kubernetes-deployed distributed observability and incident response platform f
 | Dashboards | Grafana | Provisioned RED, SLO, trace, and log dashboards |
 | Chaos | Chaos Mesh | Pod, network, DNS, and CPU fault injection |
 | Load | k6 | Smoke, load, stress, and spike profiles |
-| Dev env | devenv | Reproducible shell with Python 3.12, Go from locked rolling nixpkgs, k6, terraform, kubectl, helm |
+| Dev env | devenv | Reproducible shell with Python 3.12, Go 1.26.5, k6, Terraform, kubectl, and Helm |
 
 ## Quick Start
 
@@ -102,3 +102,4 @@ make clean       # make down + remove Terraform/devenv local state
 - A hand-off between Alertmanager and the incident engine via webhook is enough for demo-grade automated postmortems; no UI needed.
 - Treat the k6 Job exit, incident correlation, and bounded cleanup as authoritative. The demo fails rather than fabricating a postmortem or weakening thresholds.
 - Deploy immutable run-specific image tags so repeating `make up` changes pod templates and leaves a Kubernetes rollback target.
+- Build every service from digest-pinned base/tool images and committed frozen dependency locks.

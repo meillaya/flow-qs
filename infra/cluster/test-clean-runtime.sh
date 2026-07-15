@@ -65,6 +65,11 @@ printf 'make %s\n' "$*" >>"$MOCK_LOG"
 [[ "$*" == '--no-print-directory helm-uninstall-all' ]]
 FAKE
 
+  cat >"$case_dir/bin/helm" <<'FAKE'
+#!/usr/bin/env bash
+exit 0
+FAKE
+
   cat >"$case_dir/bin/terraform" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -197,7 +202,8 @@ run_case() {
     KUBECONFIG="$case_dir/home/.kube/config-observability" \
     K3D_BIN="$case_dir/bin/k3d" DOCKER_BIN="$case_dir/bin/docker" \
     KUBECTL_BIN="$case_dir/bin/kubectl" TERRAFORM_BIN="$case_dir/bin/terraform" \
-    MAKE_BIN="$case_dir/bin/make" MOCK_WORLD="$case_dir/world" \
+    MAKE_BIN="$case_dir/bin/make" HELM_BIN="${MOCK_HELM_BIN:-$case_dir/bin/helm}" \
+    MOCK_WORLD="$case_dir/world" \
     MOCK_LOG="$case_dir/log" MOCK_DESTROY_STATUS="$destroy_status" \
     bash "$helper" >"$case_dir/stdout" 2>"$case_dir/stderr"
   local status=$?
@@ -238,6 +244,8 @@ main() {
 
   case_dir="$suite/unknown-state"; make_fakes "$case_dir"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; printf 'random_resource.foreign\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
 
+  case_dir="$suite/missing-tool"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; MOCK_HELM_BIN="$case_dir/bin/missing-helm" run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
+
   case_dir="$suite/wrong-registry"; make_fakes "$case_dir"; touch "$case_dir/world/registry-present"; printf 'r1|k3d-observability-registry|database\n' >"$case_dir/world/registry-container"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
 
   case_dir="$suite/shared-network"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf 'c1\nr1\nforeign\n' >"$case_dir/world/network-endpoints"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
@@ -247,7 +255,7 @@ main() {
   case_dir="$suite/lookalikes"; make_fakes "$case_dir"; touch "$case_dir/world/lookalike-cluster" "$case_dir/world/lookalike-registry"; run_case "$case_dir" 0; assert_no_mutator "$case_dir/log"
 
   if ((failures > 0)); then printf 'cleanup matrix failures: %d\n' "$failures" >&2; return 1; fi
-  printf 'cleanup fake matrix passed: 12 scenarios plus idempotent repeat\n'
+  printf 'cleanup fake matrix passed: 13 scenarios plus idempotent repeat\n'
 }
 
 main "$@"

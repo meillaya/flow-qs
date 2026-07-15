@@ -1,21 +1,21 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 
 # Build stage: install dependencies with uv.
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim@sha256:c3d81d25b3154142b0b42eb1e61300024426268edeb5b5a26dd7ddf64d9daf28 AS builder
 
 WORKDIR /app
 
 # Install uv and copy project metadata.
-RUN pip install --no-cache-dir uv==0.10.4
+COPY --from=ghcr.io/astral-sh/uv:0.10.4@sha256:4cac394b6b72846f8a85a7a0e577c6d61d4e17fe2ccee65d9451a8b3c9efb4ac /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock README.md ./
 COPY app ./app
 
 # Create a virtual environment and install only runtime dependencies.
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Runtime stage: slim Python image with the venv copied in.
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:c3d81d25b3154142b0b42eb1e61300024426268edeb5b5a26dd7ddf64d9daf28 AS runtime
 
 WORKDIR /app
 

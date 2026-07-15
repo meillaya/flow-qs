@@ -241,8 +241,17 @@ class HTTPXUpstreamContext:
             response = await self._client.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
             return True
-        except httpx.HTTPError as exc:
-            logger.warning("incident webhook POST failed: %s", exc)
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "incident webhook POST failed: status=%d",
+                exc.response.status_code,
+            )
+            return False
+        except httpx.RequestError as exc:
+            logger.warning(
+                "incident webhook POST failed: error=%s",
+                type(exc).__name__,
+            )
             return False
 
 

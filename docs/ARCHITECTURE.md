@@ -43,7 +43,6 @@ graph TB
     checkout -->|HTTP| order
     checkout -->|gRPC| inventory
     checkout -->|gRPC| payment
-    catalog -->|gRPC| inventory
 
     catalog -->|OTLP| otel
     inventory -->|OTLP| otel
@@ -93,7 +92,6 @@ graph TB
 - **gRPC**: service-internal high-fanout or saga steps.
   - `checkout-service` -> `inventory-service` (`ReserveStock`, `ReleaseStock`)
   - `checkout-service` -> `payment-gateway` (`Charge`, `Refund`)
-  - `catalog-service` -> `inventory-service` (stock checks)
 
 OpenTelemetry context propagation works across both HTTP and gRPC, so a single trace follows a checkout request from k6 through checkout, inventory, payment, and order.
 

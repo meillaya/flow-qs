@@ -227,6 +227,7 @@ clean: clean-runtime ## Remove runtime resources, Terraform state, and local art
 	@rm -rf $(TF_DIR)/.terraform $(TF_DIR)/terraform.tfstate $(TF_DIR)/terraform.tfstate.d
 	@rm -f  $(TF_DIR)/terraform.tfstate.backup $(TF_DIR)/terraform.tfstate.*.backup
 	@echo "Removing devenv state..."
+	@if [[ -d .devenv/state ]]; then chmod -R u+w .devenv/state; fi
 	@rm -rf .devenv/state .venv .direnv
 	@echo "Removing generated evidence..."
 	@find .omo/evidence -type f -name 'tmp-*' -delete 2>/dev/null || true

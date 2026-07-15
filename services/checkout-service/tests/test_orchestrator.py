@@ -217,13 +217,16 @@ async def test_orchestrator_creates_manual_checkout_span(
 ) -> None:
     fake_cart.set_cart("ivan", [{"sku": "SKU-001", "qty": 1, "unit_cents": 1000}])
     orch: CheckoutOrchestrator = make_orchestrator()
-    await orch.checkout(_req("ivan"))
+    await orch.checkout(
+        CheckoutRequest(user_id="ivan", payment_method="tok_sensitive_123")
+    )
 
     spans = span_exporter.get_finished_spans()
     names = [s.name for s in spans]
     assert "checkout.run" in names
     checkout_run = next(s for s in spans if s.name == "checkout.run")
     attrs = dict(checkout_run.attributes or {})
+    assert "tok_sensitive_123" not in attrs.values()
     assert attrs.get("checkout.user_id") == "ivan"
     assert attrs.get("checkout.item_count") == 1
     assert attrs.get("checkout.total_cents") == 1000

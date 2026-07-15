@@ -16,7 +16,6 @@ Helm chart with local filesystem persistence and 7-day trace retention.
 | `storage.trace.local.path` | `/var/tempo/traces` | Trace block storage |
 | `storage.trace.wal.path` | `/var/tempo/wal` | Write-ahead log |
 | `tempo.retention` | `168h` | 7-day retention via compactor |
-| `tempo.querier.max_query_duration` | `0` | No query duration limit for demo |
 | `persistence.enabled` | `true` | 10Gi PVC on `local-path` StorageClass |
 | `tempo.metricsGenerator.enabled` | `false` | Prometheus handles metrics |
 | `tempo.multitenancyEnabled` | `false` | Open access inside cluster |
@@ -38,8 +37,8 @@ make apply
 Or manually:
 
 ```bash
-helm repo add grafana https://grafana.github.io/helm-charts
-helm upgrade --install tempo grafana/tempo --version 2.2.3 \
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm upgrade --install tempo grafana-community/tempo --version 2.2.3 \
   -n observability -f infra/tempo/helm-values.yaml --create-namespace
 ```
 

@@ -118,6 +118,14 @@ printf 'url=%s\n' "${url}" >>"${MOCK_CURL_LOG}"
 code=200
 body='{}'
 case "${url}" in
+    */api/traces/*)
+        trace_id="${url##*/}"
+        if [[ "${MOCK_FAILURE:-}" == tempo_empty ]]; then
+            body='{"batches":[]}'
+        else
+            body="{\"batches\":[{\"scopeSpans\":[{\"spans\":[{\"traceId\":\"${trace_id}\"}]}]}]}"
+        fi
+        ;;
     */loki/api/v1/push)
         code=204
         body=''
@@ -127,7 +135,11 @@ case "${url}" in
             body='{"status":"error","data":{"result":[]}}'
         elif [[ "${query}" =~ service_name=\"([^\"]+)\" ]]; then
             service_name="${BASH_REMATCH[1]}"
-            body="{\"status\":\"success\",\"data\":{\"resultType\":\"streams\",\"result\":[{\"stream\":{\"service_name\":\"${service_name}\"},\"values\":[[\"1\",\"log\"]]}]}}"
+            log_line='log'
+            if [[ "${service_name}" == payment-gateway && "${MOCK_FAILURE:-}" != payment_stale ]]; then
+                log_line='time=now level=INFO msg=http_request path=/__verify_log__ status=404'
+            fi
+            body="{\"status\":\"success\",\"data\":{\"resultType\":\"streams\",\"result\":[{\"stream\":{\"service_name\":\"${service_name}\"},\"values\":[[\"1\",\"${log_line}\"]]}]}}"
         elif [[ "${query}" =~ ^query=\{job=\"verify-sh-[0-9]+\"\}$ ]]; then
             body='{"status":"success","data":{"resultType":"streams","result":[{"stream":{"job":"verify"},"values":[["1","hello"]]}]}}'
         else
@@ -202,7 +214,12 @@ case "${url}" in
         body='404 page not found'
         ;;
     */ready|*/-/ready)
-        body='ready'
+        if [[ "${MOCK_FAILURE:-}" == tempo_ready ]]; then
+            code=503
+            body='not ready'
+        else
+            body='ready'
+        fi
         ;;
 esac
 
@@ -353,6 +370,16 @@ assert_contains "${TMP_DIR}/kubectl-3.log" "get deployments -A -o json" "Readine
 run_check 3 0 '' '' valid '' valid mutable
 assert_status "${RUN_STATUS}" 1 "Readiness rejects mutable or incomplete workload images"
 
+run_check 5
+assert_status "${RUN_STATUS}" 0 "OTLP verification requires the exact generated trace"
+assert_contains "${TMP_DIR}/curl-5.log" "/api/traces/" "Tempo lookup uses the generated trace ID"
+
+run_check 5 0 tempo_empty
+assert_status "${RUN_STATUS}" 1 "OTLP verification rejects an empty Tempo trace response"
+
+run_check 5 0 tempo_ready
+assert_status "${RUN_STATUS}" 1 "OTLP verification requires Tempo readiness"
+
 for pod_state in one_of_three two_of_three malformed; do
     run_check 3 0 '' '' valid '' "${pod_state}"
     assert_status "${RUN_STATUS}" 1 "Observability pod readiness fails closed for ${pod_state}"
@@ -375,6 +402,10 @@ assert_contains "${TMP_DIR}/curl-6.log" 'service_name="incident-engine"' "Loki v
 assert_status "$(grep -c 'data-urlencode=limit=1' "${TMP_DIR}/curl-6.log")" 16 "Loki queries each product identity independently without a global sample limit"
 assert_contains "${TMP_DIR}/kubectl-6.log" 'port-forward svc/payment-gateway' "Loki verification primes the gateway through its real HTTP boundary"
 assert_contains "${TMP_DIR}/curl-6.log" '/__verify_log__' "Loki verification creates a fresh non-probe payment log"
+assert_contains "${TMP_DIR}/curl-6.log" 'data-urlencode=start=' "Payment log proof is bounded after the prime request"
+
+run_check 6 0 payment_stale
+assert_status "${RUN_STATUS}" 1 "Loki rejects a stale payment log without the prime path marker"
 
 run_check 6 0 loki
 assert_status "${RUN_STATUS}" 1 "Loki check fails closed on an API error payload"
