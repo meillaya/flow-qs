@@ -69,7 +69,7 @@ terminal and stop it with Ctrl+C when finished:
 ```bash
 kubectl -n observability port-forward svc/grafana 3000:80
 kubectl -n observability port-forward svc/prometheus 9090:80
-kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
+kubectl -n observability port-forward svc/alertmanager 9093:9093
 kubectl -n observability port-forward svc/loki 3100:3100
 kubectl -n observability port-forward svc/tempo 3200:3200
 kubectl -n observability port-forward svc/otel-collector 4317:4317 4318:4318

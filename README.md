@@ -46,7 +46,7 @@ the local demo endpoints; there is no Ingress or permanent host exposure:
 ```bash
 kubectl -n observability port-forward svc/grafana 3000:80
 kubectl -n observability port-forward svc/prometheus 9090:80
-kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
+kubectl -n observability port-forward svc/alertmanager 9093:9093
 ```
 
 | Service | URL | Default credentials |
