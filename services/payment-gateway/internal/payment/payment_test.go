@@ -2,6 +2,7 @@ package payment_test
 
 import (
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +48,38 @@ func TestStore_Refund(t *testing.T) {
 	refunded := s.Refund(c.ChargeID)
 	assert.Equal(t, paymentv1.Status_REFUNDED, refunded.Status)
 	assert.Equal(t, paymentv1.Status_REFUNDED, s.Get(c.ChargeID).Status)
+}
+
+func TestStore_GetReturnsStableSnapshot(t *testing.T) {
+	s := payment.NewStore()
+	c, err := s.Charge("o3", 5000, "tok")
+	require.NoError(t, err)
+
+	snapshot := s.Get(c.ChargeID)
+	refunded := s.Refund(c.ChargeID)
+
+	assert.Equal(t, paymentv1.Status_APPROVED, snapshot.Status)
+	assert.Equal(t, paymentv1.Status_REFUNDED, refunded.Status)
+}
+
+func TestStore_GetDoesNotRaceWithRefund(t *testing.T) {
+	s := payment.NewStore()
+	c, err := s.Charge("o4", 5000, "tok")
+	require.NoError(t, err)
+
+	var workers sync.WaitGroup
+	for range 1000 {
+		workers.Add(2)
+		go func() {
+			defer workers.Done()
+			_ = s.Get(c.ChargeID).Status
+		}()
+		go func() {
+			defer workers.Done()
+			_ = s.Refund(c.ChargeID).Status
+		}()
+	}
+	workers.Wait()
 }
 
 func Test_StoreCharge_rejects_invalid_input_without_persisting(t *testing.T) {

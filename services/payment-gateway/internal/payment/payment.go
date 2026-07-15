@@ -34,6 +34,14 @@ type Store struct {
 	charges map[string]*Charge
 }
 
+func cloneCharge(charge *Charge) *Charge {
+	if charge == nil {
+		return nil
+	}
+	snapshot := *charge
+	return &snapshot
+}
+
 // NewStore creates an empty Store.
 func NewStore() *Store {
 	return &Store{charges: make(map[string]*Charge)}
@@ -92,14 +100,14 @@ func (s *Store) Charge(orderID string, amountCents int64, cardToken string) (*Ch
 		Status:      DecideStatus(amountCents),
 	}
 	s.charges[chargeID] = c
-	return c, nil
+	return cloneCharge(c), nil
 }
 
 // Get returns a charge by ID or nil if missing.
 func (s *Store) Get(chargeID string) *Charge {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.charges[chargeID]
+	return cloneCharge(s.charges[chargeID])
 }
 
 // Refund marks a charge as refunded and returns the updated charge.
@@ -111,7 +119,7 @@ func (s *Store) Refund(chargeID string) *Charge {
 		return nil
 	}
 	c.Status = paymentv1.Status_REFUNDED
-	return c
+	return cloneCharge(c)
 }
 
 // Len returns the number of stored charges.
