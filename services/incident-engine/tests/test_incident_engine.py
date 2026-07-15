@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -22,6 +23,8 @@ from app.clients import LogHit, MetricSnapshot, StaticUpstreamContext, TraceHit 
 from app.main import (  # noqa: E402
     AlertmanagerAlert,
     AlertmanagerPayload,
+    AppState,
+    _process_alert,
     create_app,
     register_chaos_experiment,
     reset_chaos_state,
@@ -527,6 +530,52 @@ def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context
     assert detail["ends_at"] == alert.endsAt
     assert detail["timeline"] == resolved_detail["timeline"]
     assert detail["correlated_chaos"] == resolved_detail["correlated_chaos"]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_resolution_cannot_be_reopened_by_inflight_firing_retry(
+    temp_paths,
+) -> None:
+    """Concurrent webhook completion cannot reverse a resolved incident."""
+
+    class BlockingContext(StaticUpstreamContext):
+        def __init__(self) -> None:
+            super().__init__()
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+            self.calls = 0
+
+        async def fetch_traces(
+            self, service: str, start: datetime, end: datetime, limit: int = 10
+        ) -> list[TraceHit]:
+            del service, start, end, limit
+            self.calls += 1
+            if self.calls == 1:
+                self.started.set()
+                await self.release.wait()
+            return []
+
+    store = IncidentStore(temp_paths["db"], temp_paths["postmortems"])
+    initial_context = StaticUpstreamContext()
+    state = AppState(store=store, context=initial_context)
+    alert = _make_alert("ConcurrentRecovery", "cart-service")
+    resolved = alert.model_copy(update={"status": "resolved"})
+    created, _, _ = await _process_alert(state, alert, "firing")
+
+    blocking_context = BlockingContext()
+    state.context = blocking_context
+    stale_task = asyncio.create_task(_process_alert(state, alert, "firing"))
+    await blocking_context.started.wait()
+    resolved_task = asyncio.create_task(_process_alert(state, resolved, "resolved"))
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(asyncio.shield(resolved_task), timeout=0.1)
+    blocking_context.release.set()
+    await asyncio.gather(stale_task, resolved_task)
+
+    persisted = store.get(created.id)
+    assert persisted is not None
+    assert persisted.status == "resolved"
+    assert persisted.ends_at == alert.endsAt
 
 
 def test_webhook_rejects_unbounded_alert_batches(temp_paths, static_context) -> None:

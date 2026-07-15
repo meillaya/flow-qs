@@ -108,18 +108,26 @@ class HTTPXUpstreamContext:
 
         hits: list[TraceHit] = []
         for trace in (data.get("traces", []) or [])[:limit]:
+            if not isinstance(trace, dict):
+                continue
             raw_trace_id = str(trace.get("traceID") or trace.get("traceId") or "")
             if not raw_trace_id:
                 continue
-            trace_id = raw_trace_id.zfill(32)
-            root = trace.get("rootServiceName") or ""
-            duration_ms = float(trace.get("durationMs") or 0)
-            start_time_ns = int(trace.get("startTimeUnixNano") or 0)
-            start_iso = (
-                datetime.fromtimestamp(start_time_ns / 1_000_000_000, tz=UTC).isoformat()
-                if start_time_ns
-                else ""
-            )
+            try:
+                trace_id = raw_trace_id.zfill(32)
+                root = trace.get("rootServiceName") or ""
+                duration_ms = float(trace.get("durationMs") or 0)
+                start_time_ns = int(trace.get("startTimeUnixNano") or 0)
+                start_iso = (
+                    datetime.fromtimestamp(
+                        start_time_ns / 1_000_000_000, tz=UTC
+                    ).isoformat()
+                    if start_time_ns
+                    else ""
+                )
+            except (OSError, OverflowError, TypeError, ValueError):
+                logger.warning("tempo trace skipped: malformed numeric fields")
+                continue
             hits.append(
                 TraceHit(
                     trace_id=trace_id,

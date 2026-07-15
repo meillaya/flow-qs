@@ -136,8 +136,12 @@ class AppState:
         self.context: UpstreamContext = context if context is not None else StaticUpstreamContext()
         self.client: httpx.AsyncClient | None = None
         self.chaos: ChaosSource | None = None
+        self._incident_locks: dict[str, asyncio.Lock] = {}
         self._background_task: asyncio.Task[None] | None = None
         self._meter_provider: MeterProvider | None = None
+
+    def incident_lock(self, incident_id: str) -> asyncio.Lock:
+        return self._incident_locks.setdefault(incident_id, asyncio.Lock())
 
 
 def _setup_otel_metrics() -> MeterProvider:
@@ -183,23 +187,27 @@ async def _resolve_reconciler(state: AppState) -> None:
         try:
             now = datetime.now(UTC)
             cutoff = now - timedelta(minutes=RESOLVE_TIMEOUT_MINUTES)
-            for record in state.store.list_all():
-                if record.status != "firing":
-                    continue
-                starts_at = parse_iso(record.starts_at)
-                if starts_at > cutoff:
-                    continue
-                record.status = "resolved"
-                record.ends_at = now.isoformat()
-                record.updated_at = now.isoformat()
-                state.store.upsert(record)
-                incidents_processed.add(1, {"alertname": record.alertname})
-                logger.info(
-                    "incident_resolved_timeout: id=%s alertname=%s service=%s",
-                    record.id,
-                    record.alertname,
-                    record.service,
-                )
+            for candidate in state.store.list_all():
+                async with state.incident_lock(candidate.id):
+                    record = state.store.get(candidate.id)
+                    if record is None:
+                        continue
+                    if record.status != "firing":
+                        continue
+                    starts_at = parse_iso(record.starts_at)
+                    if starts_at > cutoff:
+                        continue
+                    record.status = "resolved"
+                    record.ends_at = now.isoformat()
+                    record.updated_at = now.isoformat()
+                    state.store.upsert(record)
+                    incidents_processed.add(1, {"alertname": record.alertname})
+                    logger.info(
+                        "incident_resolved_timeout: id=%s alertname=%s service=%s",
+                        record.id,
+                        record.alertname,
+                        record.service,
+                    )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("resolve_reconciler error: %s", exc)
 
@@ -302,6 +310,22 @@ async def _process_alert(
     payload_status: str,
 ) -> tuple[IncidentRecord, list[TimelineEvent], str]:
     """Process a single alert and return (record, timeline, postmortem_md)."""
+    parsed_alert = _parse_alert(alert)
+    starts_at = parsed_alert[4]
+    fingerprint = parsed_alert[6]
+    incident_id = uuid.uuid5(
+        uuid.NAMESPACE_OID,
+        f"{fingerprint}:{starts_at.isoformat()}",
+    ).hex
+    async with state.incident_lock(incident_id):
+        return await _process_alert_serialized(state, alert, payload_status)
+
+
+async def _process_alert_serialized(
+    state: AppState,
+    alert: AlertmanagerAlert,
+    payload_status: str,
+) -> tuple[IncidentRecord, list[TimelineEvent], str]:
     alertname, service, severity, slo, starts_at, ends_at, fingerprint = _parse_alert(alert)
     is_resolved = payload_status == "resolved" or alert.status == "resolved"
     if not is_resolved:

@@ -30,6 +30,12 @@ async def test_fetches_tempo_contract_and_exact_trace_correlated_loki_log() -> N
                 "startTimeUnixNano": "1783751446172507001",
                 "durationMs": 8,
             },
+            {
+                "traceID": "malformed-trace",
+                "rootServiceName": "checkout-service",
+                "startTimeUnixNano": "not-a-number",
+                "durationMs": "not-a-number",
+            },
             {"rootServiceName": "checkout-service", "startTimeUnixNano": "1783751446"},
         ]
     }
