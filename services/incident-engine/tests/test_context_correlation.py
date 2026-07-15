@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -106,6 +106,37 @@ def test_timeline_exposes_trace_id_and_honest_empty_backends() -> None:
     assert "No Tempo traces returned for the incident window" in messages
     assert "No Loki logs returned for the incident window" in messages
     assert "No Prometheus samples returned for the incident window" in messages
+
+
+def test_webhook_preserves_original_start_outside_correlation_horizon(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bounding upstream queries must not rewrite the incident's actual start."""
+    monkeypatch.setenv("INCIDENT_DB_PATH", str(tmp_path / "incidents.db"))
+    monkeypatch.setenv("POSTMORTEM_DIR", str(tmp_path / "postmortems"))
+    starts_at = datetime.now(UTC) - timedelta(hours=2)
+    alert = AlertmanagerAlert(
+        status="firing",
+        labels={"alertname": "OldAlert", "service": "checkout-service"},
+        startsAt=starts_at.isoformat(),
+        fingerprint="old-alert-timeline",
+    )
+    app = create_app(context=StaticUpstreamContext())
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="firing", alerts=[alert]).model_dump(),
+        )
+        incident_id = response.json()["incidents"][0]
+        incident = client.get(f"/incidents/{incident_id}").json()
+
+    alert_started = next(
+        event
+        for event in incident["timeline"]
+        if event["source"] == "alertmanager" and "started firing" in event["message"]
+    )
+    assert alert_started["timestamp"] == starts_at.isoformat()
 
 
 def test_resolved_webhook_preserves_initiating_chaos_and_context(

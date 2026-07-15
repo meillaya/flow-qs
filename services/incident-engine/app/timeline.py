@@ -40,6 +40,17 @@ def _iso(value: datetime) -> str:
     return value.astimezone(UTC).isoformat()
 
 
+def _bounded_shift(value: datetime, delta: timedelta) -> datetime:
+    """Shift a datetime without overflowing at the representable boundaries."""
+    lower = datetime.min.replace(tzinfo=value.tzinfo)
+    upper = datetime.max.replace(tzinfo=value.tzinfo)
+    if delta < timedelta() and value < lower - delta:
+        return lower
+    if delta > timedelta() and value > upper - delta:
+        return upper
+    return value + delta
+
+
 def build_timeline(
     alert_starts_at: datetime,
     alert_ends_at: datetime | None,
@@ -161,8 +172,8 @@ def build_timeline(
         except ValueError:
             continue
         # Only include chaos experiments whose start time falls inside the incident window.
-        window_start = alert_starts_at - timedelta(minutes=15)
-        window_end = alert_ends_at or (alert_starts_at + timedelta(minutes=30))
+        window_start = _bounded_shift(alert_starts_at, -timedelta(minutes=15))
+        window_end = alert_ends_at or _bounded_shift(alert_starts_at, timedelta(minutes=30))
         if not (window_start <= chaos_start <= window_end):
             continue
         events.append(

@@ -348,7 +348,7 @@ async def _process_alert(
         else ends_at
     )
     timeline_events = build_timeline(
-        alert_starts_at=correlation_starts_at,
+        alert_starts_at=starts_at,
         alert_ends_at=effective_ends_at,
         service=service,
         alertname=alertname,
