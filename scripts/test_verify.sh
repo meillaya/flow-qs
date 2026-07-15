@@ -362,6 +362,9 @@ PY
     fi
 }
 
+run_check 99
+assert_status "${RUN_STATUS}" 2 "Verifier rejects selectors outside the documented 1-11 range"
+
 run_check 3
 assert_status "${RUN_STATUS}" 0 "Collector and log-agent readiness accept desired equals ready"
 assert_contains "${TMP_DIR}/kubectl-3.log" "get daemonset otel-collector-agent" "Readiness verifies the node log-agent DaemonSet"

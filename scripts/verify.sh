@@ -93,6 +93,12 @@ record() {
 
 SELECTED=""
 if [[ $# -gt 0 ]]; then
+    for arg in "$@"; do
+        if [[ ! "${arg}" =~ ^([1-9]|10|11)$ ]]; then
+            printf 'ERROR: invalid check selector %q; expected integers 1 through 11\n' "${arg}" >&2
+            exit 2
+        fi
+    done
     SELECTED="$*"
 fi
 selected_check() {
@@ -866,7 +872,7 @@ main() {
     } > "${evidence_file}"
     log "Evidence:  ${evidence_file}"
 
-    if [[ "${FAIL}" -gt 0 || "${DEFERRED}" -gt 0 ]]; then
+    if [[ "${TOTAL}" -eq 0 || "${FAIL}" -gt 0 || "${DEFERRED}" -gt 0 ]]; then
         cleanup_port_forwards
         exit 1
     fi
