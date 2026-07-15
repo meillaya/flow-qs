@@ -19,11 +19,12 @@ K6_JOB_NAME="${K6_JOB_NAME:-k6-load}"
 CHAOS_NAME="${CHAOS_NAME:-pod-kill-checkout}"
 CHAOS_RESOURCE_KIND="${CHAOS_RESOURCE_KIND:-workflow}"
 ALERT_CHAOS_NAME="${ALERT_CHAOS_NAME:-demo-alert-checkout}"
-ALERT_CHAOS_RESOURCE_KIND="${ALERT_CHAOS_RESOURCE_KIND:-networkchaos}"
+ALERT_CHAOS_RESOURCE_KIND="${ALERT_CHAOS_RESOURCE_KIND:-podchaos}"
+ALERT_CHAOS_DISPLAY_KIND="${ALERT_CHAOS_DISPLAY_KIND:-PodChaos}"
 EXPECTED_INCIDENT_SERVICE="${EXPECTED_INCIDENT_SERVICE:-checkout-service}"
 EXPECTED_INCIDENT_ALERT="${EXPECTED_INCIDENT_ALERT:-ServiceDown}"
 EXPECTED_POSTMORTEM_HEADER="# Postmortem — \`${EXPECTED_INCIDENT_ALERT}\` on \`${EXPECTED_INCIDENT_SERVICE}\`"
-EXPECTED_CHAOS_MARKER="**${ALERT_CHAOS_NAME}** (NetworkChaos)"
+EXPECTED_CHAOS_MARKER="**${ALERT_CHAOS_NAME}** (${ALERT_CHAOS_DISPLAY_KIND})"
 PROM_RULES_PATH="${PROM_RULES_PATH:-/api/v1/namespaces/observability/services/http:prometheus:80/proxy/api/v1/rules}"
 ALERTMANAGER_READY_PATH="${ALERTMANAGER_READY_PATH:-/api/v1/namespaces/observability/services/http:alertmanager:9093/proxy/-/ready}"
 
@@ -276,6 +277,34 @@ postmortem_matches_file() {
     && grep -Fq -- "${EXPECTED_CHAOS_MARKER}" "${path}"
 }
 
+select_ready_pod_from_json() {
+  jq -er '
+    [.items[]
+      | select(.metadata.deletionTimestamp == null)
+      | select(.status.phase == "Running")
+      | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))]
+    | sort_by(.metadata.creationTimestamp)
+    | last
+    | .metadata.name
+  '
+}
+
+wait_for_pod_creation() {
+  local namespace="$1" selector="$2" timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds)) pod_name
+  while ((SECONDS <= deadline)); do
+    pod_name="$(kubectl get pod -n "${namespace}" -l "${selector}" \
+      --field-selector='status.phase!=Succeeded,status.phase!=Failed' \
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+    if [[ -n "${pod_name}" ]]; then
+      printf '%s\n' "${pod_name}"
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 postmortem_matches_remote() {
   local path="$1"
   kubectl exec -n "${INCIDENT_NAMESPACE}" "${INCIDENT_POD}" -- \
@@ -456,7 +485,7 @@ start_causal_chaos() {
   interruptible_sleep "${SETTLE_BEFORE_CHAOS}"
   grep -qE 'kube-system|control-plane' "${ALERT_CHAOS_MANIFEST}" \
     && die "alert chaos targets control plane"
-  log "Step 3/8: applying monitoring-path NetworkChaos"
+  log "Step 3/8: applying causal checkout PodChaos"
   kubectl apply -f "${ALERT_CHAOS_MANIFEST}" >/dev/null \
     || die "alert chaos manifest apply failed"
   ALERT_CHAOS_APPLIED=1
@@ -514,14 +543,14 @@ main() {
     -n "${CHAOS_NAMESPACE}" --timeout=60s >/dev/null 2>&1 || die "Chaos Mesh is not ready"
 
   INCIDENT_POD="$(kubectl get pod -n "${INCIDENT_NAMESPACE}" -l "${INCIDENT_POD_SELECTOR}" \
-    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+    -o json 2>/dev/null | select_ready_pod_from_json)" || true
   [[ -n "${INCIDENT_POD}" ]] || die "incident-engine pod is missing"
   kubectl wait --for=condition=ready "pod/${INCIDENT_POD}" -n "${INCIDENT_NAMESPACE}" \
     --timeout=60s >/dev/null 2>&1 || die "incident-engine pod is not ready"
-  kubectl auth can-i list networkchaos.chaos-mesh.org \
+  kubectl auth can-i list podchaos.chaos-mesh.org \
     -n "${CHAOS_NAMESPACE}" \
     --as="system:serviceaccount:${INCIDENT_NAMESPACE}:${INCIDENT_SERVICE_ACCOUNT}" \
-    | grep -qx yes || die "incident-engine cannot list NetworkChaos"
+    | grep -qx yes || die "incident-engine cannot list PodChaos"
   preclean_demo_chaos || die "stale demo chaos resources could not be removed"
   kubectl exec -n "${INCIDENT_NAMESPACE}" "${INCIDENT_POD}" -- \
     sh -c ": > '${POSTMORTEM_MARKER}'" >/dev/null || die "could not create run marker"
@@ -534,11 +563,10 @@ main() {
   kubectl delete job "${K6_JOB_NAME}" -n "${LOAD_NAMESPACE}" --ignore-not-found >/dev/null
   kubectl apply -f "${K6_LOAD_MANIFEST}" >/dev/null || die "k6 manifest apply failed"
   K6_APPLIED=1
-  kubectl wait --for=condition=ready pod -l job-name="${K6_JOB_NAME}" \
+  k6_pod="$(wait_for_pod_creation "${LOAD_NAMESPACE}" "job-name=${K6_JOB_NAME}" 120)" \
+    || die "k6 pod was not created"
+  kubectl wait --for=condition=ready "pod/${k6_pod}" \
     -n "${LOAD_NAMESPACE}" --timeout=120s >/dev/null 2>&1 || die "k6 pod did not become ready"
-  k6_pod="$(kubectl get pod -n "${LOAD_NAMESPACE}" -l job-name="${K6_JOB_NAME}" \
-    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
-  [[ -n "${k6_pod}" ]] || die "k6 pod could not be identified"
 
   start_causal_chaos
   postmortem_remote="${MATCHED_POSTMORTEM}"
@@ -572,7 +600,7 @@ postmortem_path=${POSTMORTEM_OUT}
 incident_alert=${EXPECTED_INCIDENT_ALERT}
 incident_service=${EXPECTED_INCIDENT_SERVICE}
 incident_chaos=${ALERT_CHAOS_NAME}
-incident_chaos_kind=NetworkChaos
+incident_chaos_kind=${ALERT_CHAOS_DISPLAY_KIND}
 checkout_podkill_workflow=${CHAOS_NAME}
 EOF
   log "Run checks passed; finalizing cleanup"

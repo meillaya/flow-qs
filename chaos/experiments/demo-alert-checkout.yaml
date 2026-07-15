@@ -1,23 +1,18 @@
----
 apiVersion: chaos-mesh.org/v1alpha1
-kind: NetworkChaos
+kind: PodChaos
 metadata:
   name: demo-alert-checkout
   namespace: chaos-testing
+  labels:
+    app.kubernetes.io/part-of: observability-platform
+    app.kubernetes.io/component: demo-chaos
+    demo.observability/owned: "true"
 spec:
-  action: partition
+  action: pod-failure
   mode: all
+  duration: 3m
   selector:
     namespaces:
       - ecom
     labelSelectors:
       app.kubernetes.io/name: checkout-service
-  direction: from
-  target:
-    mode: all
-    selector:
-      namespaces:
-        - ecom
-      labelSelectors:
-        app.kubernetes.io/name: synthetic-monitor
-  duration: 3m

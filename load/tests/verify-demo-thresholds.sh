@@ -10,7 +10,7 @@ k6 inspect "${ROOT}/load/k6/load.js" >"${TMP}/strict.json"
 k6 inspect -e CHAOS_AWARE=true "${ROOT}/load/k6/load.js" >"${TMP}/chaos.json"
 
 jq -e '.thresholds.http_req_duration == ["p(95)<1000"] and .thresholds.http_req_failed == ["rate<0.01"] and .thresholds.checkout_success_rate == ["rate>0.95"]' "${TMP}/strict.json" >/dev/null
-jq -e '.thresholds.http_req_duration == ["p(95)<3000"] and .thresholds.http_req_failed == ["rate<0.05"] and .thresholds.checkout_success_rate == ["rate>0.90"]' "${TMP}/chaos.json" >/dev/null
+jq -e '.thresholds.http_req_duration == ["p(95)<3000"] and .thresholds.http_req_failed == ["rate<0.40"] and .thresholds.checkout_success_rate == ["rate>0.25"]' "${TMP}/chaos.json" >/dev/null
 for value in false TRUE 1 yes; do
   k6 inspect -e CHAOS_AWARE="${value}" "${ROOT}/load/k6/load.js" >"${TMP}/strict-${value}.json"
   jq -e '.thresholds.http_req_duration == ["p(95)<1000"] and .thresholds.http_req_failed == ["rate<0.01"] and .thresholds.checkout_success_rate == ["rate>0.95"]' "${TMP}/strict-${value}.json" >/dev/null

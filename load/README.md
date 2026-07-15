@@ -4,7 +4,7 @@ This directory contains [k6](https://k6.io/) scripts and Kubernetes Job
 manifests for load-testing the observability-platform demo services.
 
 All tests run **inside the cluster** in the `load` namespace using
-`grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d`.
+`grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669`.
 Scripts are mounted through ConfigMaps, so changing a test does not require a
 new image.
 
@@ -70,7 +70,10 @@ Pod to fail and making failures visible in `kubectl get jobs -n load`.
 
 The strict standalone load manifest leaves `CHAOS_AWARE` unset. The demo
 manifest sets it to the exact value `true`, selecting p95 latency below 3000ms,
-errors below 5%, and checkout success above 90%. Any other value retains the
+errors below 40%, and checkout success above 25%. This demo-only envelope
+expects the checkout outage deliberately injected by the three-minute
+`PodChaos`, while still rejecting a collapsed load harness or total service
+failure. Any other value retains the
 standalone load profile of p95 latency below 1000ms, errors below 1%, and
 checkout success above 95%. Smoke, stress, and spike remain unchanged.
 

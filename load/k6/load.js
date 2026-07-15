@@ -18,8 +18,8 @@ exports.options = {
   ],
   thresholds: {
     http_req_duration: [CHAOS_AWARE ? "p(95)<3000" : "p(95)<1000"],
-    http_req_failed: [CHAOS_AWARE ? "rate<0.05" : "rate<0.01"],
-    checkout_success_rate: [CHAOS_AWARE ? "rate>0.90" : "rate>0.95"],
+    http_req_failed: [CHAOS_AWARE ? "rate<0.40" : "rate<0.01"],
+    checkout_success_rate: [CHAOS_AWARE ? "rate>0.25" : "rate>0.95"],
   },
 };
 

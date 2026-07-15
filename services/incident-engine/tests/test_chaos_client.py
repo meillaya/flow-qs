@@ -176,7 +176,7 @@ def test_chart_grants_read_only_chaos_mesh_access() -> None:
     assert binding["subjects"][0]["namespace"] == "incident"
 
 
-def test_demo_network_chaos_prefers_primary_selector_over_peer_target() -> None:
+def test_demo_pod_chaos_reports_the_primary_checkout_selector() -> None:
     from pathlib import Path
 
     import yaml
@@ -188,7 +188,7 @@ def test_demo_network_chaos_prefers_primary_selector_over_peer_target() -> None:
 
     assert experiment is not None
     assert experiment["name"] == "demo-alert-checkout"
-    assert experiment["kind"] == "NetworkChaos"
+    assert experiment["kind"] == "PodChaos"
     assert experiment["target"] == "checkout-service"
 
     from app.postmortem import render_postmortem
@@ -211,7 +211,7 @@ def test_demo_network_chaos_prefers_primary_selector_over_peer_target() -> None:
         correlated_chaos=[experiment],
     )
     markdown = render_postmortem(record, [])
-    assert "**demo-alert-checkout** (NetworkChaos)" in markdown
+    assert "**demo-alert-checkout** (PodChaos)" in markdown
     assert "targeting `checkout-service`" in markdown
     assert "targeting `synthetic-monitor`" not in markdown
 

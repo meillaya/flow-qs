@@ -8,10 +8,30 @@ trap 'rm -rf "${TMP}"' EXIT
 DEMO_LIB_ONLY=1 DEMO_REPO_ROOT="${ROOT}" DEMO_LOG_DIR="${TMP}/logs" \
   DEMO_POSTMORTEM_OUT_DIR="${TMP}/postmortems" source "${ROOT}/scripts/demo.sh"
 
+cat >"${TMP}/incident-pods.json" <<'JSON'
+{"items":[
+  {"metadata":{"name":"completed-old","creationTimestamp":"2026-07-15T08:00:00Z"},"status":{"phase":"Succeeded","conditions":[{"type":"Ready","status":"False"}]}},
+  {"metadata":{"name":"ready-current","creationTimestamp":"2026-07-15T08:10:00Z"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}}
+]}
+JSON
+[[ "$(select_ready_pod_from_json <"${TMP}/incident-pods.json")" == "ready-current" ]]
+
+: >"${TMP}/pod-polls"
+kubectl() {
+  printf '.\n' >>"${TMP}/pod-polls"
+  if [[ "$(wc -l <"${TMP}/pod-polls")" -ge 3 ]]; then
+    printf 'k6-new\n'
+  fi
+}
+sleep() { :; }
+[[ "$(wait_for_pod_creation load job-name=k6-load 3)" == "k6-new" ]]
+[[ "$(wc -l <"${TMP}/pod-polls")" -eq 3 ]]
+unset -f sleep
+
 manifest="${ROOT}/chaos/experiments/demo-alert-checkout.yaml"
-yq -e '.kind == "NetworkChaos" and .metadata.name == "demo-alert-checkout" and .metadata.namespace == "chaos-testing" and .spec.action == "partition" and .spec.mode == "all" and .spec.duration == "3m" and .spec.direction == "from" and .spec.selector.namespaces == ["ecom"] and .spec.selector.labelSelectors["app.kubernetes.io/name"] == "checkout-service" and .spec.target.mode == "all" and .spec.target.selector.namespaces == ["ecom"] and .spec.target.selector.labelSelectors["app.kubernetes.io/name"] == "synthetic-monitor"' "${manifest}" >/dev/null
+yq -e '.kind == "PodChaos" and .metadata.name == "demo-alert-checkout" and .metadata.namespace == "chaos-testing" and .spec.action == "pod-failure" and .spec.mode == "all" and .spec.duration == "3m" and .spec.selector.namespaces == ["ecom"] and .spec.selector.labelSelectors["app.kubernetes.io/name"] == "checkout-service"' "${manifest}" >/dev/null
 [[ "${ALERT_CHAOS_NAME}" == "demo-alert-checkout" ]]
-[[ "${ALERT_CHAOS_RESOURCE_KIND}" == "networkchaos" ]]
+[[ "${ALERT_CHAOS_RESOURCE_KIND}" == "podchaos" ]]
 [[ "${EXPECTED_INCIDENT_SERVICE}" == "checkout-service" ]]
 
 valid="${TMP}/valid.md"
@@ -19,11 +39,11 @@ wrong_service="${TMP}/wrong-service.md"
 wrong_chaos="${TMP}/wrong-chaos.md"
 missing_correlation="${TMP}/missing-correlation.md"
 printf '%s\n' "# Postmortem — \`ServiceDown\` on \`checkout-service\`" \
-  '**demo-alert-checkout** (NetworkChaos)' >"${valid}"
+  '**demo-alert-checkout** (PodChaos)' >"${valid}"
 printf '%s\n' "# Postmortem — \`ServiceDown\` on \`catalog-service\`" \
-  '**demo-alert-checkout** (NetworkChaos)' >"${wrong_service}"
+  '**demo-alert-checkout** (PodChaos)' >"${wrong_service}"
 printf '%s\n' "# Postmortem — \`ServiceDown\` on \`checkout-service\`" \
-  '**other-chaos** (NetworkChaos)' >"${wrong_chaos}"
+  '**other-chaos** (PodChaos)' >"${wrong_chaos}"
 printf '%s\n' "# Postmortem — \`ServiceDown\` on \`checkout-service\`" \
   >"${missing_correlation}"
 postmortem_matches_file "${valid}"
@@ -43,19 +63,19 @@ if postmortem_matches_remote "${missing_correlation}"; then exit 1; fi
 
 env -u KUBECONFIG helm show crds chaos-mesh/chaos-mesh --version 2.8.3 \
   >"${TMP}/crds.yaml"
-yq 'select(.kind == "CustomResourceDefinition" and .spec.names.kind == "NetworkChaos") | .spec.versions[] | select(.name == "v1alpha1") | .schema.openAPIV3Schema' \
-  "${TMP}/crds.yaml" >"${TMP}/networkchaos_v1alpha1.json"
+yq 'select(.kind == "CustomResourceDefinition" and .spec.names.kind == "PodChaos") | .spec.versions[] | select(.name == "v1alpha1") | .schema.openAPIV3Schema' \
+  "${TMP}/crds.yaml" >"${TMP}/podchaos_v1alpha1.json"
 kubeconform -strict \
   -schema-location "${TMP}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
   "${manifest}"
 
 settle_line="$(grep -n 'waiting .* before causal chaos' "${ROOT}/scripts/demo.sh" | cut -d: -f1)"
-alert_line="$(grep -n 'applying monitoring-path NetworkChaos' "${ROOT}/scripts/demo.sh" | cut -d: -f1)"
+alert_line="$(grep -n 'applying causal checkout PodChaos' "${ROOT}/scripts/demo.sh" | cut -d: -f1)"
 accept_line="$(grep -n 'waiting up to .*matching checkout ServiceDown' "${ROOT}/scripts/demo.sh" | cut -d: -f1)"
 active_line="$(grep -n 'k6_job_is_active || die' "${ROOT}/scripts/demo.sh" | cut -d: -f1)"
 workflow_line="$(grep -n 'starting recurring checkout pod-kill workflow' "${ROOT}/scripts/demo.sh" | cut -d: -f1)"
 [[ "${settle_line}" -lt "${alert_line}" && "${alert_line}" -lt "${accept_line}" && "${accept_line}" -lt "${active_line}" && "${active_line}" -lt "${workflow_line}" ]]
-grep -q 'auth can-i list networkchaos.chaos-mesh.org' "${ROOT}/scripts/demo.sh"
+grep -q 'auth can-i list podchaos.chaos-mesh.org' "${ROOT}/scripts/demo.sh"
 
 mkdir -p "${TMP}/logs"
 : >"${LOG_FILE}"
@@ -93,13 +113,13 @@ bounded_kubectl() {
 }
 preclean_demo_chaos >/dev/null
 grep -q '^delete workflow pod-kill-checkout ' "${TMP}/kubectl-calls"
-grep -q '^delete networkchaos demo-alert-checkout ' "${TMP}/kubectl-calls"
+grep -q '^delete podchaos demo-alert-checkout ' "${TMP}/kubectl-calls"
 : >"${TMP}/kubectl-calls"
 cleanup 1 >/dev/null
 workflow_delete="$(grep -n '^delete workflow pod-kill-checkout ' "${TMP}/kubectl-calls" | cut -d: -f1)"
-network_delete="$(grep -n '^delete networkchaos demo-alert-checkout ' "${TMP}/kubectl-calls" | cut -d: -f1)"
+alert_delete="$(grep -n '^delete podchaos demo-alert-checkout ' "${TMP}/kubectl-calls" | cut -d: -f1)"
 nodes_delete="$(grep -n '^delete workflownode ' "${TMP}/kubectl-calls" | cut -d: -f1)"
-[[ "${workflow_delete}" -lt "${network_delete}" && "${network_delete}" -lt "${nodes_delete}" ]]
+[[ "${workflow_delete}" -lt "${alert_delete}" && "${alert_delete}" -lt "${nodes_delete}" ]]
 
 CLEANUP_DONE=0
 CHAOS_APPLIED=0
@@ -107,8 +127,8 @@ ALERT_CHAOS_APPLIED=1
 CLEANUP_WAIT_SECONDS=1
 printf 'stale success\n' >"${SUMMARY_FILE}"
 bounded_kubectl() {
-  if [[ "$1" == "get" && "$2" == "networkchaos" ]]; then
-    printf 'networkchaos/demo-alert-checkout\n'
+  if [[ "$1" == "get" && "$2" == "podchaos" ]]; then
+    printf 'podchaos/demo-alert-checkout\n'
   fi
   return 0
 }
