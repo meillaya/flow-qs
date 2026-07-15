@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
 	"github.com/example/payment-gateway/internal/payment"
@@ -63,6 +65,20 @@ func TestCharge_Declined(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, paymentv1.Status_DECLINED, resp.Status)
+}
+
+func Test_Charge_returns_invalid_argument_when_request_is_invalid(t *testing.T) {
+	t.Parallel()
+
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+
+	_, err := client.Charge(context.Background(), &paymentv1.ChargeRequest{
+		OrderId: " ", AmountCents: -1, CardToken: " ",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestGetStatus(t *testing.T) {

@@ -3,6 +3,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/example/payment-gateway/internal/payment"
@@ -10,7 +12,7 @@ import (
 
 // HTTPStore is the store interface used by HTTP handlers.
 type HTTPStore interface {
-	Charge(orderID string, amountCents int64, cardToken string) *payment.Charge
+	Charge(orderID string, amountCents int64, cardToken string) (*payment.Charge, error)
 	Get(chargeID string) *payment.Charge
 }
 
@@ -23,11 +25,10 @@ type ChargeRequest struct {
 
 // ChargeResponse is the JSON response for POST /charge.
 type ChargeResponse struct {
-	Status    string `json:"status"`
-	ChargeID  string `json:"charge_id"`
-	OrderID   string `json:"order_id"`
-	Amount    int64  `json:"amount_cents"`
-	CardToken string `json:"card_token"`
+	Status   string `json:"status"`
+	ChargeID string `json:"charge_id"`
+	OrderID  string `json:"order_id"`
+	Amount   int64  `json:"amount_cents"`
 }
 
 // statusText maps proto status to lowercase string.
@@ -48,21 +49,40 @@ func statusText(status int32) string {
 func ChargeHandler(store HTTPStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ChargeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeInvalidCharge(w)
 			return
 		}
-		c := store.Charge(req.OrderID, req.AmountCents, req.CardToken)
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			writeInvalidCharge(w)
+			return
+		}
+		c, err := store.Charge(req.OrderID, req.AmountCents, req.CardToken)
+		if errors.Is(err, payment.ErrInvalidCharge) {
+			writeInvalidCharge(w)
+			return
+		}
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 		resp := ChargeResponse{
-			Status:    statusText(int32(c.Status)),
-			ChargeID:  c.ChargeID,
-			OrderID:   c.OrderID,
-			Amount:    c.AmountCents,
-			CardToken: c.CardToken,
+			Status:   statusText(int32(c.Status)),
+			ChargeID: c.ChargeID,
+			OrderID:  c.OrderID,
+			Amount:   c.AmountCents,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}
+}
+
+func writeInvalidCharge(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	_, _ = w.Write([]byte(`{"error":"invalid charge"}`))
 }
 
 // HealthzHandler handles GET /healthz.
