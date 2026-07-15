@@ -1,7 +1,7 @@
 
 SHELL              := bash
 .SHELLFLAGS        := -eu -o pipefail -c
-export KUBECONFIG  ?= $(HOME)/.kube/config-observability
+override export KUBECONFIG := $(HOME)/.kube/config-observability
 
 CLUSTER_NAME       := observability-platform
 REGISTRY_NAME      := k3d-observability-registry

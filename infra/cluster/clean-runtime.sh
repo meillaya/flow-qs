@@ -13,7 +13,13 @@ MAKE_BIN=${MAKE_BIN:-make}
 HELM_BIN=${HELM_BIN:-helm}
 NETWORK_NAME="k3d-${CLUSTER_NAME}"
 SECONDARY_KUBECONFIG="$HOME/.config/kubeconfig-${CLUSTER_NAME}.yaml"
+PROJECT_KUBECONFIG="$HOME/.kube/config-observability"
 DOCKER_ENDPOINT_FORMAT="{{ range \$id, \$_ := .Containers }}{{ \$id }}{{ \"\\n\" }}{{ end }}"
+
+[[ $KUBECONFIG == "$PROJECT_KUBECONFIG" ]] || {
+  echo "Refusing to delete non-project KUBECONFIG: $KUBECONFIG" >&2
+  exit 1
+}
 
 for tool in "$K3D_BIN" "$DOCKER_BIN" "$KUBECTL_BIN" "$TERRAFORM_BIN" "$MAKE_BIN" "$HELM_BIN"; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Required cleanup tool is unavailable: $tool" >&2; exit 1; }
