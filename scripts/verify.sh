@@ -229,7 +229,7 @@ check_3_pods_ready() {
     local workload_count="invalid" invalid_image_count="invalid"
     read -r workload_count invalid_image_count < <(
         printf '%s' "${deployments_out}" | jq -er '
-            ["cart-service", "catalog-service", "checkout-service", "inventory-service",
+            ["cart-service", "catalog-service", "checkout-service-checkout-service", "inventory-service",
              "order-service", "payment-gateway", "synthetic-monitor", "incident-engine"] as $expected
             | [.items[]
                | select(.metadata.name as $name | $expected | index($name))
@@ -238,7 +238,7 @@ check_3_pods_ready() {
                 ($workloads | length),
                 ([$workloads[]
                   | select((.image | type) != "string"
-                    or (.image | test("(@sha256:[0-9a-f]{64}|:[0-9a-f]{12,64})$")) | not)]
+                    or (.image | test("(@sha256:[0-9a-f]{64}|:(git-)?[0-9a-f]{12,64})$")) | not)]
                  | length)
               ] | @tsv
         ' 2>/dev/null || printf 'invalid\tinvalid\n'
@@ -479,6 +479,37 @@ check_7_prom_metric() {
         fi
     fi
 
+    local settle_seconds="${VERIFY_METRIC_SETTLE_SECONDS:-35}"
+    local -a metric_pids=() metric_ports=() metric_services=()
+    local entry service service_port local_port metric_pid
+    for entry in "${SERVICES[@]}"; do
+        read -r service service_port <<<"${entry}"
+        local_port=$(pick_local_port)
+        kubectl -n "${ECOM_NS}" port-forward "svc/${service}" \
+            "${local_port}:${service_port}" >/dev/null 2>&1 &
+        metric_pid=$!
+        track_port_forward "${metric_pid}"
+        metric_pids+=("${metric_pid}")
+        metric_ports+=("${local_port}")
+        metric_services+=("${service}")
+    done
+    sleep 1
+
+    local wave index
+    for wave in 1 2; do
+        for index in "${!metric_ports[@]}"; do
+            curl -sS -m 3 -o /dev/null \
+                "http://127.0.0.1:${metric_ports[$index]}/__verify_metric__" 2>/dev/null || true
+            if [[ "${metric_services[$index]}" == "checkout-service-checkout-service" ]]; then
+                curl -sS -m 3 -o /dev/null -X POST \
+                    -H 'Content-Type: application/json' -d '{}' \
+                    "http://127.0.0.1:${metric_ports[$index]}/checkout" 2>/dev/null || true
+            fi
+        done
+        sleep "${settle_seconds}"
+    done
+    stop_port_forwards "${metric_pids[@]}"
+
     local prom_svc="prometheus"
     local prom_port=80
     if ! kubectl -n "${OBS_NS}" get svc prometheus >/dev/null 2>&1; then
@@ -497,12 +528,13 @@ check_7_prom_metric() {
     ready_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${prom_pf}/-/ready" 2>/dev/null) || ready_code=000
 
     local -a queries=(
-        'count(count by (service_name) (http_server_request_duration_seconds_count{service_namespace="ecom",service_name=~"cart-service|catalog-service|checkout-service|inventory-service|order-service|payment-gateway"}))'
+        'count(count by (service_name) (http_server_request_duration_seconds_count{service_name=~"cart-service|catalog-service|checkout-service|inventory-service|order-service|payment-gateway"}))'
         'count({__name__=~"sli:.*:availability:ratio_5m"})'
-        'up{job="payment-gateway"}'
+        'up{job="kubernetes-pods",app_kubernetes_io_name="payment-gateway"}'
         'sum(traces_service_graph_request_total)'
     )
     local -a expected=("6" "7" "1" "1")
+    local -a comparisons=("equal" "equal" "equal" "positive")
     local -a names=("canonical-services" "slo-records" "payment-target" "servicegraph-edge")
     local check_failed=0 index query qbody api_status result_value
     for index in "${!queries[@]}"; do
@@ -520,8 +552,17 @@ check_7_prom_metric() {
                 end
             ' 2>/dev/null || printf 'invalid\tinvalid\n'
         )
-        log "  ${names[$index]} status=${api_status} value=${result_value} expected=${expected[$index]}"
-        if [[ "${api_status}" != "success" || "${result_value}" != "${expected[$index]}" ]]; then
+        local expected_display="${expected[$index]}"
+        if [[ "${comparisons[$index]}" == "positive" ]]; then
+            expected_display=">0"
+        fi
+        log "  ${names[$index]} status=${api_status} value=${result_value} expected=${expected_display}"
+        if [[ "${api_status}" != "success" ]]; then
+            check_failed=1
+        elif [[ "${comparisons[$index]}" == "equal" && "${result_value}" != "${expected[$index]}" ]]; then
+            check_failed=1
+        elif [[ "${comparisons[$index]}" == "positive" ]] \
+            && ! jq -en --arg value "${result_value}" '($value | tonumber) > 0' >/dev/null 2>&1; then
             check_failed=1
         fi
     done

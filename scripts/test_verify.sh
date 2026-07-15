@@ -65,7 +65,7 @@ case " $* " in
         ;;
     *" get deployments -A -o json "*)
         case "${MOCK_IMAGE_STATE:-valid}" in
-            valid) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"catalog-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/catalog-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"checkout-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/checkout-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"inventory-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/inventory-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"order-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/order-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"payment-gateway"},"spec":{"template":{"spec":{"containers":[{"image":"registry/payment-gateway:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"synthetic-monitor"},"spec":{"template":{"spec":{"containers":[{"image":"registry/synthetic-monitor:0123456789ab"}]}}}},{"metadata":{"namespace":"incident","name":"incident-engine"},"spec":{"template":{"spec":{"containers":[{"image":"registry/incident-engine:0123456789ab"}]}}}}]}' ;;
+            valid) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"catalog-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/catalog-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"checkout-service-checkout-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/checkout-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"inventory-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/inventory-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"order-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/order-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"payment-gateway"},"spec":{"template":{"spec":{"containers":[{"image":"registry/payment-gateway:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"synthetic-monitor"},"spec":{"template":{"spec":{"containers":[{"image":"registry/synthetic-monitor:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"incident","name":"incident-engine"},"spec":{"template":{"spec":{"containers":[{"image":"registry/incident-engine:git-0123456789abcdef0123456789abcdef01234567"}]}}}}]}' ;;
             mutable) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:dev"}]}}}}]}' ;;
         esac
         ;;
@@ -146,7 +146,7 @@ case "${url}" in
         elif [[ "${query}" == *'up{job="payment-gateway"}'* ]]; then
             body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{"job":"payment-gateway"},"value":[1,"1"]}]}}'
         elif [[ "${query}" == *traces_service_graph_request_total* ]]; then
-            body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"1"]}]}}'
+            body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"207"]}]}}'
         else
             body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1,"1"]}]}}'
         fi
@@ -253,6 +253,7 @@ run_check() {
         MOCK_MISSING_SERVICE="${missing_service}" \
         MOCK_POD_STATE="${pod_state}" \
         MOCK_IMAGE_STATE="${image_state}" \
+        VERIFY_METRIC_SETTLE_SECONDS=0 \
         bash "${VERIFY}" "${check}" >"${TMP_DIR}/check-${check}-${invalid_rules}.out" 2>&1
     RUN_STATUS=$?
     set -e
@@ -373,8 +374,10 @@ assert_contains "${TMP_DIR}/kubectl-7.log" "port-forward svc/prometheus " "Prome
 assert_contains "${TMP_DIR}/kubectl-7.log" ":80" "Prometheus forwards the rendered Service port 80"
 assert_contains "${TMP_DIR}/curl-7.log" "http_server_request_duration_seconds_count" "Prometheus verifies the canonical histogram for six services"
 assert_contains "${TMP_DIR}/curl-7.log" 'sli:.*:availability:ratio_5m' "Prometheus verifies seven generated SLO records"
-assert_contains "${TMP_DIR}/curl-7.log" 'up{job="payment-gateway"}' "Prometheus verifies the payment scrape target"
+assert_contains "${TMP_DIR}/curl-7.log" 'up{job="kubernetes-pods",app_kubernetes_io_name="payment-gateway"}' "Prometheus verifies the discovered payment scrape target"
 assert_contains "${TMP_DIR}/curl-7.log" 'traces_service_graph_request_total' "Prometheus verifies a servicegraph edge"
+assert_status "$(grep -c '/__verify_metric__' "${TMP_DIR}/curl-7.log" || true)" 12 "Prometheus primes canonical metrics with two requests to each service"
+assert_status "$(grep -c '/checkout' "${TMP_DIR}/curl-7.log" || true)" 2 "Prometheus primes both checkout SLO series"
 
 run_check 7 0 prometheus
 assert_status "${RUN_STATUS}" 1 "Prometheus metric check fails closed on a malformed result"
