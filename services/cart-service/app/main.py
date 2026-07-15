@@ -14,6 +14,7 @@ from typing import Annotated, TypedDict
 from fastapi import FastAPI, Path
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.metrics import NoOpMeterProvider
 from pydantic import BaseModel, Field
 
 from app.http_metrics import HTTPMetrics
@@ -100,7 +101,7 @@ app = FastAPI(
 )
 http_metrics = HTTPMetrics(os.getenv("OTEL_SERVICE_NAME", "cart-service"))
 app.middleware("http")(http_metrics.middleware)
-FastAPIInstrumentor.instrument_app(app)
+FastAPIInstrumentor.instrument_app(app, meter_provider=NoOpMeterProvider())
 
 
 @app.get("/healthz")

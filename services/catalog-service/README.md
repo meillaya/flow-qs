@@ -48,5 +48,7 @@ family is `http_server_request_duration_seconds_*`, partitioned by
 ## Helm
 
 ```bash
-helm install catalog charts/catalog-service -n ecom --create-namespace
+IMAGE_TAG="git-$(git rev-parse --verify HEAD)"
+helm upgrade --install catalog charts/catalog-service -n ecom --create-namespace \
+  --set-string svc-template.image.tag="${IMAGE_TAG}"
 ```

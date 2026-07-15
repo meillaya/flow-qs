@@ -267,6 +267,7 @@ class CheckoutOrchestrator:
                 ],
                 "total_cents": cart_view.total_cents,
                 "payment_charge_id": payment.charge_id,
+                "payment_order_id": payment.order_id,
             }
             try:
                 order = await self._order.create_order(payload)

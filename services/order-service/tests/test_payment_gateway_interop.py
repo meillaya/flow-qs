@@ -89,4 +89,8 @@ def test_get_payment_status_interoperates_with_real_go_gateway(real_gateway: str
             timeout=2,
         )
 
-    assert get_payment_status(charge.charge_id, address=real_gateway) == "approved"
+    payment = get_payment_status(charge.charge_id, address=real_gateway)
+    assert payment.charge_id == charge.charge_id
+    assert payment.order_id == "interop-order"
+    assert payment.amount_cents == 5000
+    assert payment.status == "approved"

@@ -23,6 +23,7 @@ from app.main import (  # noqa: E402
     AlertmanagerAlert,
     AlertmanagerPayload,
     create_app,
+    register_chaos_experiment,
     reset_chaos_state,
 )
 from app.postmortem import REQUIRED_SECTIONS, has_all_sections, render_postmortem  # noqa: E402
@@ -338,6 +339,15 @@ def test_webhook_bounds_hostile_correlation_windows(
     temp_paths: dict[str, str], starts_at: str
 ) -> None:
     """Extreme alert timestamps cannot expand upstream correlation queries."""
+    reset_chaos_state()
+    register_chaos_experiment(
+        {
+            "name": "current-chaos",
+            "kind": "PodChaos",
+            "target": "cart-service",
+            "start_time": datetime.now(UTC).isoformat(),
+        }
+    )
     context = WindowRecordingContext()
     alert = _make_alert().model_copy(update={"startsAt": starts_at, "endsAt": None})
     payload = AlertmanagerPayload(status="firing", alerts=[alert])
@@ -470,6 +480,33 @@ async def test_firing_webhook_ignores_alertmanager_zero_ends_at(
     assert detail["status"] == "firing"
     assert detail["ends_at"] is None
     assert "0001-01-01" not in detail["postmortem"]
+
+
+def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context) -> None:
+    """An out-of-order firing retry cannot reopen a resolved incident."""
+    reset_chaos_state()
+    app = create_app(context=static_context)
+    alert = _make_alert("RecoveredAlert", "cart-service")
+    resolved = alert.model_copy(update={"status": "resolved"})
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="firing", alerts=[alert]).model_dump(),
+        ).json()
+        incident_id = created["incidents"][0]
+        client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="resolved", alerts=[resolved]).model_dump(),
+        )
+        client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="firing", alerts=[alert]).model_dump(),
+        )
+        detail = client.get(f"/incidents/{incident_id}").json()
+
+    assert detail["status"] == "resolved"
+    assert detail["ends_at"] == alert.endsAt
 
 
 def test_webhook_rejects_unbounded_alert_batches(temp_paths, static_context) -> None:

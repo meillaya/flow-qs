@@ -58,4 +58,8 @@ The chart injects the following environment variables automatically:
 - `OTEL_METRICS_EXPORTER=otlp`
 - `OTEL_LOGS_EXPORTER=otlp`
 
+The cart chart sets the auto-instrumentation metrics exporter to `none` because
+cart's route-aware middleware owns its canonical histogram and excludes probes;
+traces and logs remain OTLP-exported.
+
 Liveness and readiness probe paths default to `/healthz` and `/readyz` and are configurable via `values.yaml`.

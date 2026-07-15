@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.payment_client import PaymentStatus
 
 
 @pytest.fixture(autouse=True)
@@ -11,7 +12,11 @@ def _patch_db_and_payment(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "DB_PATH", db_path)
     monkeypatch.setattr(main, "_setup_tracing", lambda: None)
     main._init_db()
-    monkeypatch.setattr(main, "get_payment_status", lambda _order_id: "approved")
+    monkeypatch.setattr(
+        main,
+        "get_payment_status",
+        lambda charge_id: PaymentStatus(charge_id, "payment-order-1", 5000, "approved"),
+    )
 
 
 @pytest.fixture
@@ -143,12 +148,17 @@ def test_create_order_rejects_invalid_domain_payload(
 def test_create_order_persists_paid_when_charge_is_approved(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(main, "get_payment_status", lambda _charge_id: "approved")
+    monkeypatch.setattr(
+        main,
+        "get_payment_status",
+        lambda charge_id: PaymentStatus(charge_id, "payment-order-1", 5000, "approved"),
+    )
     payload = {
         "user_id": "u1",
         "items": [{"sku": "SKU-001", "qty": 1}],
         "total_cents": 5000,
         "payment_charge_id": "ch-1",
+        "payment_order_id": "payment-order-1",
     }
 
     response = client.post("/orders", json=payload)
@@ -164,7 +174,13 @@ def test_create_order_rejects_nonapproved_charge_without_insert(
     monkeypatch: pytest.MonkeyPatch,
     payment_status: str,
 ) -> None:
-    monkeypatch.setattr(main, "get_payment_status", lambda _charge_id: payment_status)
+    monkeypatch.setattr(
+        main,
+        "get_payment_status",
+        lambda charge_id: PaymentStatus(
+            charge_id, "payment-order-1", 5000, payment_status
+        ),
+    )
 
     response = client.post(
         "/orders",
@@ -173,6 +189,7 @@ def test_create_order_rejects_nonapproved_charge_without_insert(
             "items": [{"sku": "SKU-001", "qty": 1}],
             "total_cents": 5000,
             "payment_charge_id": "ch-1",
+        "payment_order_id": "payment-order-1",
         },
     )
 
@@ -181,10 +198,63 @@ def test_create_order_rejects_nonapproved_charge_without_insert(
     assert client.get("/orders").json() == []
 
 
+@pytest.mark.parametrize(
+    ("gateway_order_id", "gateway_amount", "detail"),
+    [
+        ("other-order", 5000, "payment order does not match"),
+        ("payment-order-1", 4999, "payment amount does not match"),
+    ],
+)
+def test_create_order_rejects_mismatched_payment_identity(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    gateway_order_id: str,
+    gateway_amount: int,
+    detail: str,
+) -> None:
+    monkeypatch.setattr(
+        main,
+        "get_payment_status",
+        lambda charge_id: PaymentStatus(
+            charge_id, gateway_order_id, gateway_amount, "approved"
+        ),
+    )
+    response = client.post(
+        "/orders",
+        json={
+            "user_id": "u1",
+            "items": [{"sku": "SKU-001", "qty": 1}],
+            "total_cents": 5000,
+            "payment_charge_id": "ch-1",
+            "payment_order_id": "payment-order-1",
+        },
+    )
+    assert response.status_code == 409
+    assert response.json() == {"detail": detail}
+    assert client.get("/orders").json() == []
+
+
+def test_create_order_rejects_replayed_charge(
+    client: TestClient,
+) -> None:
+    payload = {
+        "user_id": "u1",
+        "items": [{"sku": "SKU-001", "qty": 1}],
+        "total_cents": 5000,
+        "payment_charge_id": "ch-1",
+        "payment_order_id": "payment-order-1",
+    }
+    assert client.post("/orders", json=payload).status_code == 201
+    replay = client.post("/orders", json={**payload, "user_id": "attacker"})
+    assert replay.status_code == 409
+    assert replay.json() == {"detail": "payment charge already used"}
+    assert len(client.get("/orders").json()) == 1
+
+
 def test_create_order_returns_503_when_payment_lookup_fails_without_insert(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def unavailable(_charge_id: str) -> str:
+    def unavailable(_charge_id: str) -> PaymentStatus:
         raise grpc.RpcError("unavailable")
 
     monkeypatch.setattr(main, "get_payment_status", unavailable)
@@ -196,6 +266,7 @@ def test_create_order_returns_503_when_payment_lookup_fails_without_insert(
             "items": [{"sku": "SKU-001", "qty": 1}],
             "total_cents": 5000,
             "payment_charge_id": "ch-1",
+        "payment_order_id": "payment-order-1",
         },
     )
 

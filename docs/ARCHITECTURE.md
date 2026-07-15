@@ -52,7 +52,7 @@ graph TB
     order -->|OTLP| otel
     payment -->|OTLP traces| otel
     payment -->|Prometheus scrape| prom
-    synthetic -->|HTTP probes| checkout
+    synthetic -->|HTTP health probes| Services
     synthetic -->|OTLP| otel
 
     Services -->|container stdout/stderr| agents
@@ -84,7 +84,7 @@ graph TB
 | checkout-service | Python | FastAPI :8003 | Saga orchestrator: cart, inventory, payment, order. Compensation on failure. |
 | order-service | Python | FastAPI :8004 | Order persistence. SQLite backend. |
 | payment-gateway | Go | Chi HTTP :8005 + gRPC :50052 | Mock payment charge/refund. In-memory store. |
-| synthetic-monitor | Python | FastAPI :8000 | Probes checkout in-cluster and exports availability telemetry. |
+| synthetic-monitor | Python | FastAPI :8000 | Probes all six application services in-cluster and exports availability telemetry used by ServiceDown alerts. |
 | incident-engine | Python | FastAPI :8088 | Receives Alertmanager webhooks and writes Markdown postmortems. |
 
 ## Inter-service Protocols

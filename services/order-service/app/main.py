@@ -64,11 +64,19 @@ def _init_db() -> None:
                 items JSON NOT NULL,
                 total_cents INTEGER NOT NULL,
                 status TEXT NOT NULL,
-                created_at TIMESTAMP NOT NULL
+                created_at TIMESTAMP NOT NULL,
+                payment_charge_id TEXT
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(orders)")}
+        if "payment_charge_id" not in columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN payment_charge_id TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_charge_id "
+            "ON orders(payment_charge_id) WHERE payment_charge_id IS NOT NULL"
+        )
         conn.commit()
 
 
@@ -80,6 +88,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "total_cents": row["total_cents"],
         "status": row["status"],
         "created_at": row["created_at"],
+        "payment_charge_id": row["payment_charge_id"],
     }
 
 
@@ -150,25 +159,39 @@ def get_order(order_id: str, user_id: Annotated[str | None, Query()] = None) -> 
 def create_order(payload: OrderCreateRequest) -> dict:
     order_id = str(uuid.uuid4())
     status = "pending"
-    if payload.payment_charge_id is not None:
+    payment_charge_id: str | None = None
+    if payload.payment_charge_id is not None and payload.payment_order_id is not None:
         try:
-            payment_status = get_payment_status(payload.payment_charge_id)
+            payment = get_payment_status(payload.payment_charge_id)
         except grpc.RpcError as exc:
             raise HTTPException(
                 status_code=503, detail="payment status unavailable"
             ) from exc
-        if payment_status != "approved":
+        if payment.status != "approved":
             raise HTTPException(status_code=409, detail="payment is not approved")
+        if payment.order_id != payload.payment_order_id:
+            raise HTTPException(status_code=409, detail="payment order does not match")
+        if payment.amount_cents != payload.total_cents:
+            raise HTTPException(status_code=409, detail="payment amount does not match")
+        payment_charge_id = payment.charge_id
         status = "paid"
 
     items = [item.model_dump() for item in payload.items]
     created_at = datetime.now(UTC).isoformat()
 
     with _get_db() as conn:
+        if payment_charge_id is not None:
+            existing_charge = conn.execute(
+                "SELECT 1 FROM orders WHERE payment_charge_id = ?", (payment_charge_id,)
+            ).fetchone()
+            if existing_charge is not None:
+                raise HTTPException(status_code=409, detail="payment charge already used")
         conn.execute(
             """
-            INSERT INTO orders (id, user_id, items, total_cents, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO orders (
+                id, user_id, items, total_cents, status, created_at, payment_charge_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id,
@@ -177,6 +200,7 @@ def create_order(payload: OrderCreateRequest) -> dict:
                 payload.total_cents,
                 status,
                 created_at,
+                payment_charge_id,
             ),
         )
         conn.commit()

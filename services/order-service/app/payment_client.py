@@ -2,6 +2,7 @@
 
 import logging
 import os
+from dataclasses import dataclass
 
 import grpc
 
@@ -12,8 +13,16 @@ logger = logging.getLogger(__name__)
 PAYMENT_GATEWAY_ADDRESS = os.getenv("PAYMENT_GATEWAY_ADDRESS", "payment-gateway:50052")
 
 
-def get_payment_status(charge_id: str, *, address: str | None = None) -> str:
-    """Return the gateway status for a payment charge ID."""
+@dataclass(frozen=True)
+class PaymentStatus:
+    charge_id: str
+    order_id: str
+    amount_cents: int
+    status: str
+
+
+def get_payment_status(charge_id: str, *, address: str | None = None) -> PaymentStatus:
+    """Return the gateway record for a payment charge ID."""
     with grpc.insecure_channel(address or PAYMENT_GATEWAY_ADDRESS) as channel:
         stub = payment_pb2_grpc.PaymentServiceStub(channel)
         request = payment_pb2.GetStatusRequest(charge_id=charge_id)
@@ -28,4 +37,9 @@ def get_payment_status(charge_id: str, *, address: str | None = None) -> str:
         payment_pb2.DECLINED: "declined",
         payment_pb2.REFUNDED: "refunded",
     }
-    return status_names[response.status]
+    return PaymentStatus(
+        charge_id=response.charge_id,
+        order_id=response.order_id,
+        amount_cents=response.amount_cents,
+        status=status_names[response.status],
+    )

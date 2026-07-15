@@ -61,7 +61,7 @@ uv run pytest
 ```
 
 The default `pyproject.toml` configures pytest to fail under 80% coverage; the
-current suite contains 40 focused incident, context, lifecycle, and security tests.
+current suite contains 41 focused incident, context, lifecycle, and security tests.
 The upstream API calls are mocked with `respx` and `StaticUpstreamContext`.
 
 ## Build and push
@@ -74,8 +74,10 @@ make build-push-images
 ## Deploy
 
 ```bash
+IMAGE_TAG="git-$(git rev-parse --verify HEAD)"
 helm upgrade --install incident-engine charts/incident-engine \
-  --namespace incident --create-namespace
+  --namespace incident --create-namespace \
+  --set-string image.tag="${IMAGE_TAG}"
 ```
 
 The Helm chart mounts two PVCs (`/data` and `/postmortems`) so incidents

@@ -20,7 +20,9 @@ EXPOSE 8000
 
 # Make the virtual environment commands available on PATH so that
 # opentelemetry-instrument can discover uvicorn.
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    OTEL_METRICS_EXPORTER="none" \
+    OTEL_PYTHON_DISABLED_INSTRUMENTATIONS="fastapi,requests"
 
 # Use the OpenTelemetry Python distro to auto-instrument FastAPI and requests.
 CMD ["opentelemetry-instrument", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

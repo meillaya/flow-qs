@@ -228,10 +228,10 @@ clean: clean-runtime ## Remove runtime resources, Terraform state, and local art
 	@rm -f  $(TF_DIR)/terraform.tfstate.backup $(TF_DIR)/terraform.tfstate.*.backup
 	@echo "Removing devenv state..."
 	@if [[ -d .devenv/state ]]; then chmod -R u+w .devenv/state; fi
-	@rm -rf .devenv/state .venv .direnv
+	@rm -rf .devenv/state .venv .direnv .ruff_cache
 	@echo "Removing service and test caches..."
-	@find services -type d \( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name .coverage \) -prune -exec rm -rf {} +
-	@find services -type f \( -name .coverage -o -name 'coverage.out' \) -delete
+	@find services -type d \( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name '*.egg-info' \) -prune -exec rm -rf {} +
+	@find services -type f \( -name .coverage -o -name 'coverage.out' -o -name orders.db \) -delete
 	@echo "Removing generated evidence..."
 	@find .omo/evidence -type f -name 'tmp-*' -delete 2>/dev/null || true
 	@echo "Clean complete."

@@ -45,6 +45,8 @@ make build-push-images
 ## Deploy
 
 ```bash
+IMAGE_TAG="git-$(git rev-parse --verify HEAD)"
 helm upgrade --install synthetic-monitor charts/synthetic-monitor \
-  --namespace ecom --create-namespace
+  --namespace ecom --create-namespace \
+  --set-string svc-template.image.tag="${IMAGE_TAG}"
 ```
