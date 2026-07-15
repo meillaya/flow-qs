@@ -139,6 +139,33 @@ def test_webhook_preserves_original_start_outside_correlation_horizon(
     assert alert_started["timestamp"] == starts_at.isoformat()
 
 
+@pytest.mark.parametrize(
+    "starts_at",
+    ["0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"],
+)
+def test_webhook_preserves_offset_extremes_without_overflow(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, starts_at: str
+) -> None:
+    """Representable ISO timestamps remain serializable at offset extremes."""
+    monkeypatch.setenv("INCIDENT_DB_PATH", str(tmp_path / "incidents.db"))
+    monkeypatch.setenv("POSTMORTEM_DIR", str(tmp_path / "postmortems"))
+    alert = AlertmanagerAlert(
+        status="firing",
+        labels={"alertname": "OffsetExtreme", "service": "checkout-service"},
+        startsAt=starts_at,
+        fingerprint=f"offset-extreme-{starts_at}",
+    )
+    app = create_app(context=StaticUpstreamContext())
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="firing", alerts=[alert]).model_dump(),
+        )
+
+    assert response.status_code == 200
+
+
 def test_resolved_webhook_preserves_initiating_chaos_and_context(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

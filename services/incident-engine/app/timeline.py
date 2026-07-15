@@ -34,10 +34,13 @@ class TimelineEvent:
 
 
 def _iso(value: datetime) -> str:
-    """Return an ISO-8601 UTC string for a datetime."""
+    """Return ISO-8601, normalized to UTC when that instant is representable."""
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
-    return value.astimezone(UTC).isoformat()
+    try:
+        return value.astimezone(UTC).isoformat()
+    except OverflowError:
+        return value.isoformat()
 
 
 def _bounded_shift(value: datetime, delta: timedelta) -> datetime:
