@@ -33,7 +33,10 @@ devenv shell
 # 2. Provision the k3d cluster, observability stack, and services
 make up
 
-# 3. Run the end-to-end demo: load -> chaos -> incident -> postmortem
+# 3. Verify product telemetry, SLO rules, dashboards, and service health
+make verify
+
+# 4. Run the end-to-end demo: load -> chaos -> incident -> postmortem
 make demo
 ```
 
@@ -80,11 +83,12 @@ kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
 ## Development Commands
 
 ```bash
-make lint        # ruff, pyright, golangci-lint
+make lint        # Helm lint, Ruff, ty, gofmt, go vet, golangci-lint
 make test        # pytest + go test
-make lint-chart  # helm lint on svc-template
-make down        # tear down the cluster
-make clean       # remove Terraform state and local artifacts
+make lint-chart  # Helm lint every local chart
+make verify      # validate live telemetry, rules, dashboards, and services
+make down        # remove only this repository's runtime resources
+make clean       # make down + remove Terraform/devenv local state
 ```
 
 ## Learnings
