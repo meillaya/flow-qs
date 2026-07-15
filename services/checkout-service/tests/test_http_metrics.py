@@ -7,6 +7,7 @@ from app.http_metrics import EXPLICIT_BOUNDARIES, HTTPMetrics
 
 def _histogram_data(reader: InMemoryMetricReader):
     metrics_data = reader.get_metrics_data()
+    assert metrics_data is not None
     return next(
         metric.data
         for resource in metrics_data.resource_metrics

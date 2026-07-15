@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, Literal
 
 # Force the SDK to use an in-memory exporter BEFORE app modules are imported.
 os.environ.setdefault("ENABLE_OTLP_EXPORTER", "false")
@@ -166,7 +166,7 @@ class FakeOrderClient:
     def __init__(self) -> None:
         self.created: list[dict[str, Any]] = []
         self.fail: bool = False
-        self.status = "paid"
+        self.status: Literal["pending", "paid"] = "paid"
         self._next_id = 1
 
     async def create_order(self, payload: dict[str, Any]) -> Any:
