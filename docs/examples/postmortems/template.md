@@ -47,7 +47,7 @@ Evidence:
 
 - Prometheus query: `<query>`
 - Trace ID: `<trace-id>`
-- Log query: `{service_name="<service>"}`
+- Log query: `{service_namespace="ecom",service_name="<service>"}`
 
 ## Resolution
 

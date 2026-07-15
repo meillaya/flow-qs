@@ -1,6 +1,6 @@
 # Tempo (local filesystem trace storage)
 
-Single-replica Grafana Tempo deployment using the upstream `grafana/tempo`
+Single-replica Grafana Tempo deployment using `grafana/tempo` chart `2.2.3`
 Helm chart with local filesystem persistence and 7-day trace retention.
 
 ## Files
@@ -39,7 +39,8 @@ Or manually:
 
 ```bash
 helm repo add grafana https://grafana.github.io/helm-charts
-helm upgrade --install tempo grafana/tempo -n observability -f helm-values.yaml --create-namespace
+helm upgrade --install tempo grafana/tempo --version 2.2.3 \
+  -n observability -f infra/tempo/helm-values.yaml --create-namespace
 ```
 
 ## Verify
@@ -56,4 +57,6 @@ kubectl get pvc -n observability -l app.kubernetes.io/name=tempo
 make reset
 ```
 
-This uninstalls the Helm release and deletes the Tempo PVCs (data loss).
+This uninstalls the release and deletes the Tempo PVCs. All retained traces
+are lost. Recreate a PVC deliberately when an immutable storage field changes;
+there is no in-place migration guarantee in this local-demo stack.

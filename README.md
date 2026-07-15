@@ -14,7 +14,7 @@ A Kubernetes-deployed distributed observability and incident response platform f
 |-------|------------|---------|
 | Cluster | k3d + Terraform | Local Kubernetes with reproducible infrastructure |
 | Services | Python/FastAPI + Go/Chi | Polyglot microservices with OTel auto-instrumentation |
-| Telemetry | OpenTelemetry Collector | Receives OTLP and fans out traces/logs/metrics |
+| Telemetry | OpenTelemetry Collector | One OTLP gateway plus node log agents; routes traces, logs, and metrics |
 | Traces | Grafana Tempo | Distributed trace storage and query |
 | Logs | Grafana Loki | Log aggregation |
 | Metrics | Prometheus | Time-series metrics and SLO recording rules |
@@ -37,11 +37,18 @@ make up
 make demo
 ```
 
-After `make up`, the following ports are forwarded to the k3d load balancer:
+The stack is intentionally private to the cluster. Open separate terminals for
+the local demo endpoints; there is no Ingress or permanent host exposure:
+
+```bash
+kubectl -n observability port-forward svc/grafana 3000:80
+kubectl -n observability port-forward svc/prometheus 9090:80
+kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
+```
 
 | Service | URL | Default credentials |
 |---------|-----|---------------------|
-| Grafana | http://localhost:3000 | admin / admin |
+| Grafana | http://localhost:3000 | `admin / admin` (local demo only) |
 | Prometheus | http://localhost:9090 | none |
 | Alertmanager | http://localhost:9093 | none |
 
@@ -83,9 +90,11 @@ make clean       # remove Terraform state and local artifacts
 ## Learnings
 
 - Keep the OTel Collector pipeline as the single source of truth; mirror it into Helm values to avoid drift.
+- Collect Kubernetes container logs with one node agent per schedulable node; keep stateful servicegraph processing on the single local-demo gateway.
+- Use `http_server_request_duration_seconds_{bucket,count,sum}` with `service_name`, `service_namespace`, `http_response_status_code`, and `http_route` as the stable RED contract. Payment uses the same schema through its bounded Prometheus scrape exception.
 - Use provisioned Grafana JSON dashboards and Alertmanager YAML so the stack is reproducible without click-ops.
-- Multi-window multi-burn-rate alerts reduce noise: fast-burn pages catch emergencies, slow-burn tickets catch budget drift.
+- Multi-window multi-burn-rate alerts reduce noise: fast-burn pages catch emergencies and slow-burn warnings catch budget drift.
 - Running k6 as a Kubernetes Job keeps load generation inside the cluster network and avoids host-side port conflicts.
 - A hand-off between Alertmanager and the incident engine via webhook is enough for demo-grade automated postmortems; no UI needed.
-- Demo orchestration needs a hard watchdog timeout (15 min subshell SIGTERM), trap-based cleanup on Ctrl+C, and a fallback postmortem path so the artifact pipeline still produces content when the incident-engine is not yet deployed.
-- Parsing k6 stdout with a Python heredoc is a reliable fallback for extracting p95/error-rate when the in-pod `/tmp/results.json` is unreachable after Job termination.
+- Treat the k6 Job exit, incident correlation, and bounded cleanup as authoritative. The demo fails rather than fabricating a postmortem or weakening thresholds.
+- Deploy immutable run-specific image tags so repeating `make up` changes pod templates and leaves a Kubernetes rollback target.

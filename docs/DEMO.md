@@ -57,7 +57,7 @@ threshold after a failure.
 ## Prerequisites
 
 - All six services are Available in `ecom`.
-- Chaos Mesh 2.7.x is ready in `chaos-testing`.
+- Chaos Mesh 2.8.3 is ready in `chaos-testing` with its controller endpoint disabled.
 - Prometheus contains checkout's `ServiceDown` rule and Alertmanager is ready.
 - incident-engine is ready in `incident`, has persistent postmortem storage,
   and its ServiceAccount can list NetworkChaos:
@@ -73,7 +73,8 @@ The command must print `yes`.
 ## Run
 
 ```bash
-make demo 2>&1 | tee /tmp/demo.log
+mkdir -p .omo/evidence
+make demo 2>&1 | tee .omo/evidence/manual-demo.log
 ```
 
 The total run has a 15-minute watchdog. Alert correlation has a 240-second

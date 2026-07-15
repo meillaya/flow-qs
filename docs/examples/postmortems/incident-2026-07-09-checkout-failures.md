@@ -43,7 +43,7 @@ Evidence:
 
 - Prometheus query: `histogram_quantile(0.99, sum(rate(checkout_end_to_end_duration_seconds_bucket[5m])) by (le))` peaked at 2.34s.
 - Trace ID: `a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0` shows `payment-gateway.Charge` span duration of 501 ms.
-- Log query: `{service_name="checkout-service"} |= "CheckoutError"` shows 31 timeout errors.
+- Log query: `{service_namespace="ecom",service_name="checkout-service"} |= "CheckoutError"` shows 31 timeout errors.
 
 ## Resolution
 
@@ -80,6 +80,6 @@ After the experiment was removed, `payment-gateway` returned to normal latency a
 
 ## Appendix
 
-- Alertmanager alert: `http://localhost:9093/#/alerts?filter=alertname%3D%22SLOLatencyBurnTooFast%22`
-- Grafana dashboard: `http://localhost:3000/d/red-checkout/checkout-red-dashboard`
+- Alertmanager alert: `<alertmanager-port-forward-url>/#/alerts?filter=alertname%3D%22SLOLatencyBurnTooFast%22`
+- Grafana dashboard: `<grafana-port-forward-url>/d/red-checkout/checkout-red-dashboard`
 - Related incident: none

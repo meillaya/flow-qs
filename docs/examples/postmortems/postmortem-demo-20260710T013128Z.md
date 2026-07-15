@@ -1,14 +1,14 @@
 # Postmortem — `HighErrorRate` on `cart-service`
 _Generated 2026-07-10T01:18:11.630996+00:00 by incident-engine._
 ## Summary
-On 2026-07-09T21:00:00+00:00, the alert `HighErrorRate` fired against the `cart-service` service at severity `critical`. The incident lasted approximately 7.0 minutes. The incident-engine correlated traces from Tempo, logs from Loki, and metric snapshots from Prometheus, then produced this postmortem for human review.
+On 2026-07-09T21:00:00+00:00, the alert `HighErrorRate` fired against the `cart-service` service at severity `page`. The incident lasted approximately 7.0 minutes. The incident-engine correlated traces from Tempo, logs from Loki, and metric snapshots from Prometheus, then produced this postmortem for human review.
 ## Impact
 - **Affected service**: `cart-service`
 - **Alert**: `HighErrorRate`
 - **Severity**: `critical`
 - **Related SLO**: `availability`
 - **User impact**: requests to `cart-service` were degraded while the alert was firing.
-- **Error budget**: consumption depends on the alert duration; check the recording rule `slo:availability:burn_rate_{5m,1h,6h,24h}` for live burn-rate data.
+- **Error budget**: consumption depends on the alert duration; derive live burn from the service-qualified `sli:<service>:availability:ratio_{5m,1h,6h,1d}` records and inspect `slo:<service>:availability:error_budget_remaining:30d`.
 
 ## Timeline
 | Timestamp (UTC) | Source | Event |

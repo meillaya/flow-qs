@@ -3,9 +3,10 @@
 This directory contains [k6](https://k6.io/) scripts and Kubernetes Job
 manifests for load-testing the observability-platform demo services.
 
-All tests run **inside the cluster** as Kubernetes Jobs using the
-`grafana/k6:latest` image. Scripts are mounted via ConfigMap so the image does
-not need to be rebuilt when the test changes.
+All tests run **inside the cluster** in the `load` namespace using
+`grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d`.
+Scripts are mounted through ConfigMaps, so changing a test does not require a
+new image.
 
 ## Structure
 
@@ -76,8 +77,8 @@ checkout success above 95%. Smoke, stress, and spike remain unchanged.
 ## Notes
 
 - Tests assume services are reachable at their cluster DNS names
-  (`cart-service`, `checkout-service`, etc.) on the ports defined in the Helm
-  values.
+  (`cart-service.ecom`, `checkout-service-checkout-service.ecom`, etc.) on the
+  ports defined in the Helm values.
 - The checkout flow posts to `cart-service:8002/cart/{user_id}/items` and then
   `checkout-service:8003/checkout`.
 - Checkout requests rotate through the inventory service's seeded `SKU-001`
@@ -90,3 +91,8 @@ checkout success above 95%. Smoke, stress, and spike remain unchanged.
   from `kubectl logs` after the Job completes.
 - k6 is intentionally **not** executed from the host; all traffic originates
   from within the cluster.
+- A Job's exit status is authoritative. Do not rewrite thresholds or infer a
+  passing result from partial stdout after a failed Job.
+- `make -C load clean` removes all four profile Jobs and ConfigMaps. The demo
+  additionally removes its run-specific Job and fails if bounded cleanup
+  leaves it behind.

@@ -1,277 +1,204 @@
-# Setup Guide
+# Setup and verification
 
-This guide walks through installing prerequisites, entering the development shell, provisioning the cluster, and verifying the stack.
+Enten is a local k3d demo. It does not install Ingress, TLS, public load
+balancers, production authentication, backups, or highly available storage.
 
-## Prerequisites
+## Tool and runtime pins
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Docker | 24.x+ | Required by k3d. Allocate at least 6 GB RAM to Docker. |
-| Nix | 2.18+ | Used by devenv to install Python, Go, k6, terraform, kubectl, helm. |
-| devenv | latest | `nix profile install nixpkgs#devenv` or follow [devenv.sh](https://devenv.sh). |
-| k3d | 5.x+ | Installed automatically via Terraform local-exec if `~/.local/bin/k3d` exists; otherwise install first. |
-| shellcheck | 0.10+ | Optional, only needed if you re-lint `scripts/verify.sh`. `nix profile install nixpkgs#shellcheck --impure`. |
-| Internet | n/a | Needed to pull Helm charts and container images on first boot. |
+Enter `devenv shell` before running project commands. The deployment contract
+pins these external artifacts:
 
-## Enter the Development Shell
+| Component | Pin |
+|---|---|
+| k3d | `v5.9.0` |
+| K3s | `rancher/k3s:v1.35.6-k3s1` |
+| Prometheus chart | `29.16.0` |
+| Grafana chart | `12.7.2` |
+| Loki chart | `18.5.0` |
+| Tempo chart | `2.2.3` |
+| Chaos Mesh chart | `2.8.3` |
+| k6 | `grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d` |
+
+Prerequisites are Docker 24 or newer with at least 6 GiB assigned, Nix 2.18 or
+newer, and internet access for the first chart/image pull.
 
 ```bash
-cd /home/mei/projects/enten-v2
 devenv shell
-```
-
-The shell sets:
-
-- `KUBECONFIG=$HOME/.kube/config-observability`
-- `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc:4317`
-
-Verify the tools:
-
-```bash
-python3 --version   # 3.12
-go version          # version pinned by devenv.lock
-terraform version   # >= 1.5
-kubectl version     # client 1.29+
+docker version
+k3d version
+terraform version
+kubectl version --client
 helm version
-k6 version
+promtool --version
 ```
 
-The payment gateway continues to target Go 1.22 in `go.mod` and CI, while
-the development shell uses the compatible Go release from the locked rolling
-nixpkgs input.
+k3d 5.9.0's published matrix covers K3s 1.30 through 1.33, not 1.35.6.
+The pairing is therefore a repository-owned compatibility exception: cluster
+creation, node readiness, CNI/DNS, registry pull, local-path PVC, Chaos Mesh,
+and restart persistence smoke evidence must pass. Do not describe it as an
+upstream-tested pairing.
 
-## Provision the Cluster and Stack
-
-A single command now brings up **everything** (cluster + observability stack + services):
+## Provision
 
 ```bash
 make up
 ```
 
-`make up` performs, in order:
+The command creates one server and two agent nodes, the local registry, and
+the `observability`, `ecom`, `incident`, `load`, and `chaos-testing`
+namespaces. It installs exact chart versions, one Collector gateway, one log
+agent on every schedulable node, Tempo, Loki, Prometheus/Alertmanager,
+Grafana, Chaos Mesh, the application releases, generated rules, datasources,
+and all ten dashboard JSON files.
 
-1. `terraform -chdir=infra/cluster apply -auto-approve`
-   — creates the k3d cluster (`observability-platform`, 1 server + 2 agents), the local registry `k3d-observability-registry:5000`, and the five platform namespaces.
-2. `helm repo add` for every required chart (idempotent).
-3. `helm upgrade --install otel-collector ./infra/otel-collector/helm --namespace observability`
-4. `helm upgrade --install tempo grafana/tempo` (with `infra/tempo/helm-values.yaml`)
-5. `helm upgrade --install loki grafana/loki` (with `infra/loki/helm-values.yaml`)
-6. `helm upgrade --install prometheus prometheus-community/prometheus` (with `infra/prometheus/helm-values.yaml`, includes the kube-state-metrics + Alertmanager subcharts)
-7. `helm upgrade --install grafana grafana/grafana` (with `infra/grafana/helm-values.yaml`)
-8. `kubectl apply` for the Prometheus scrape ConfigMap and Grafana datasource ConfigMap.
-9. `kubectl apply -k observability/prometheus-rules/` (alert + SLI recording rules).
-10. `helm upgrade --install <release> charts/<service>` for every entry in the `SERVICES` matrix in the Makefile:
-    `cart-service`, `catalog-service`, `checkout-service`, `inventory-service`,
-    `order-service`, `payment-gateway`, `synthetic-monitor`.
-11. `kubectl wait --for=condition=Available deploy --all-namespaces` (5-minute timeout).
-
-Total wall-clock time on a cold start is roughly 5–10 minutes (mostly image pulls).
-
-## Verify the Deployment
-
-The canonical health check is now `make verify`, which delegates to `scripts/verify.sh`:
+Application images use a run-specific immutable tag. A second deployment must
+change each workload pod template and create a new ReplicaSet; a mutable
+development tag is not a deployment identity. Inspect and roll back with:
 
 ```bash
-make verify                  # all 11 checks
-make verify CHECKS="1 2 3"   # subset (also: bash scripts/verify.sh 1 2 3)
+kubectl get deploy -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,IMAGE:.spec.template.spec.containers[*].image'
+kubectl rollout history -n ecom deployment/<service>
+kubectl rollout undo -n ecom deployment/<service>
 ```
 
-`verify.sh` runs **11 mandatory checks** plus a `prerequisites` step. It never
-auto-fixes failures; it only reports. Every check is one of:
+## Local access
 
-- **PASS** — observable evidence matches the expectation.
-- **FAIL** — observable evidence contradicts the expectation.
-- **DEFERRED-PENDING-DEPLOY** — the component's source-of-truth exists (Helm values,
-  ConfigMap, chart) but the release is not yet installed onto the cluster.
-  This is the expected state for any check that depends on a Helm release that
-  has not yet been `helm install`-ed.
-
-### The 11 checks
-
-| # | Name                  | What it does                                                                                  | PASS criterion                                                            |
-|---|-----------------------|-----------------------------------------------------------------------------------------------|---------------------------------------------------------------------------|
-| 1 | cluster nodes         | `kubectl get nodes`                                                                           | `>=3` nodes, all `Ready`                                                  |
-| 2 | namespaces            | `kubectl get ns`                                                                              | `observability`, `ecom`, `chaos-testing`, `load`, `incident` all present  |
-| 3 | pods ready            | `kubectl get pods -A`                                                                         | non-zero count of pods in `Running / Ready / Ready`                       |
-| 4 | service /healthz      | `curl http://<svc>.ecom:PORT/healthz` for the 6 services (with `kubectl port-forward` fallback) | every service returns HTTP 200                                            |
-| 5 | OTLP trace            | Push a synthetic span to OTel Collector → `/api/search` on Tempo                              | push returns 2xx AND search returns 2xx                                   |
-| 6 | Loki logs             | Push a synthetic entry to `/loki/api/v1/push` → query `/loki/api/v1/query`                    | push returns 2xx AND query returns 2xx                                    |
-| 7 | Prometheus `up`       | `GET /api/v1/query?query=up` on Prometheus                                                    | HTTP 2xx AND `.data.result` non-empty                                     |
-| 8 | Grafana datasources   | `GET /api/datasources` (admin/admin)                                                          | HTTP 2xx AND `>=1` datasource present                                     |
-| 9 | Grafana svc-overview  | `GET /api/dashboards/uid/svc-overview` (admin/admin)                                          | HTTP 200                                                                  |
-| 10 | Prometheus rules     | `GET /api/v1/rules`                                                                          | HTTP 2xx AND `>=5` alerting rules across all groups                       |
-| 11 | incident-engine      | `GET /incidents`                                                                             | HTTP 2xx AND response is a JSON array                                    |
-
-### Exit codes
-
-| Code | Meaning                                                              |
-|------|----------------------------------------------------------------------|
-| 0    | All selected checks PASS (or only DEFERREDs were non-PASS)           |
-| 1    | At least one selected check FAILed                                   |
-| 2    | Invocation error (missing prerequisites, bad arguments)              |
-
-A summary is appended to `.omo/evidence/task-23-verify-summary.txt` on every
-run. View it with:
+All platform Services remain `ClusterIP`. Run each required forward in its own
+terminal and stop it with Ctrl+C when finished:
 
 ```bash
-cat .omo/evidence/task-23-verify-summary.txt
+kubectl -n observability port-forward svc/grafana 3000:80
+kubectl -n observability port-forward svc/prometheus 9090:80
+kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
+kubectl -n observability port-forward svc/loki 3100:3100
+kubectl -n observability port-forward svc/tempo 3200:3200
+kubectl -n observability port-forward svc/otel-collector 4317:4317 4318:4318
 ```
 
-### Reading the output
+| Surface | Local URL | Notes |
+|---|---|---|
+| Grafana | `http://127.0.0.1:3000` | `admin / admin`, local demo only |
+| Prometheus | `http://127.0.0.1:9090` | query/rule/target APIs |
+| Alertmanager | `http://127.0.0.1:9093` | alert and routing APIs |
+| Loki | `http://127.0.0.1:3100` | readiness/query APIs |
+| Tempo | `http://127.0.0.1:3200` | readiness/search APIs |
+| OTLP | `127.0.0.1:4317`, `http://127.0.0.1:4318` | temporary test ingestion only |
 
-```
-[1;34m=== verify.sh — Enten v2 end-to-end health check ===[0m
-KUBECONFIG = /home/mei/.kube/config-observability
+These URLs do not work until the matching forward is running. There is no
+k3d load-balancer shortcut.
 
-[1;34m=== Check 4: service /healthz (6 services in ecom) ===[0m
-  ok   cart-service (port-forward 8002 -> 8002) -> 200
-  ...
-  FAIL checkout-service-checkout-service -> 000
-
-[1;34m=== Summary ===[0m
-  PASS         1.cluster-nodes
-  DEFERRED     5.otel-trace  -- otel-collector service not present
-  ...
-
-Total: 11    PASS: 3    FAIL: 1    DEFERRED: 7
-```
-
-`FAIL` is a real, observable gap (e.g. a pod is alive but its `/healthz`
-endpoint is unresponsive). `DEFERRED-PENDING-DEPLOY` is "the source-of-truth
-exists; the deployment step has not run yet." Both are *reported*, never
-auto-fixed.
-
-### Running individual checks
+## Verify
 
 ```bash
-bash scripts/verify.sh 7         # only check 7
-bash scripts/verify.sh 4 5 6     # checks 4, 5, 6
+make verify
+bash scripts/verify.sh 3 6 7 8 9 10
 ```
 
-Internally every check is its own function (`check_1_cluster_nodes`,
-`check_2_namespaces`, ...) so it's straightforward to add a 12th check later.
+All selected checks must pass. A missing deployed component is a failure, not
+a successful defer. The verifier checks:
 
-## Manual Verification (after the stack is up)
+1. three Ready cluster nodes;
+2. all five namespaces;
+3. all observability pods, Collector desired/ready replicas, node log-agent desired/ready counts, and eight immutable application image references;
+4. all six application health endpoints;
+5. an OTLP trace accepted by Tempo;
+6. a Loki backend canary plus real container-log identities for the six applications, synthetic monitor, and incident engine;
+7. the canonical histogram for six services, seven generated availability records, payment's scrape target, and a servicegraph edge;
+8. exactly the Prometheus, Tempo, Loki, and Alertmanager Grafana datasources;
+9. all ten provisioned dashboard UIDs;
+10. loaded Prometheus recording and alert rules;
+11. the incident-engine API.
 
-Beyond `make verify`, you can poke individual pieces:
+The verifier owns its port-forward children and temporary response files. INT,
+TERM, normal success, and failure all reap those processes.
+
+## Telemetry contract checks
+
+With the Prometheus forward running:
 
 ```bash
-# Cluster nodes
-kubectl get nodes
+curl -fsS -G http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=count by (service_name) (http_server_request_duration_seconds_count{service_namespace="ecom"})' | jq
 
-# Core namespaces
-kubectl get pods -n ecom
-kubectl get pods -n observability
-kubectl get pods -n incident
-kubectl get pods -n chaos-testing
+curl -fsS -G http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query={__name__="sli:end-to-end-checkout:availability:ratio_5m"}' | jq
 
-# Prometheus targets
-curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.job'
-
-# Tempo readiness
-curl -s http://localhost:3200/ready
-
-# Loki ready
-curl -s http://localhost:3100/ready
-
-# OTel Collector metrics
-curl -s http://localhost:8888/metrics | head
-
-# Port-forward Grafana if the load balancer is not reachable
-kubectl port-forward -n observability svc/grafana 3000:80
+curl -fsS -G http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query={__name__="slo:catalog-service:availability:error_budget_remaining:30d"}' | jq
 ```
 
-Open http://localhost:3000 and log in with `admin / admin`.
+The RED contract is
+`http_server_request_duration_seconds_{bucket,count,sum}` in seconds with
+`service_name`, `service_namespace`, `http_response_status_code`, and
+`http_route`. Python services send it through OTLP. Payment exposes the same
+schema through the bounded Prometheus scrape exception. The checkout route
+feeds both `checkout-service` and output records named
+`end-to-end-checkout`.
 
-## Telemetry Smoke Test
+Prometheus retains 31 days on a 20 GiB local PVC so the 30-day ratio and error
+budget records have complete input. Loki and Tempo retain 168 hours. These are
+demo-grade local filesystem stores, not backup or recovery guarantees.
+
+## Validate repository artifacts
 
 ```bash
-# Synthetic trace + log + metric from a service
-curl -X POST http://catalog-service.ecom:8000/items
-
-# Check Prometheus has the metric through its in-cluster Service port
-curl -G http://prometheus.observability:80/api/v1/query \
-    --data-urlencode 'query=catalog_service_requests_total'
-
-# Check Tempo has the trace
-curl http://tempo.observability:3200/api/search?limit=20
-
-# Check Loki has the log line
-curl -G http://loki.observability:3100/loki/api/v1/query \
-    --data-urlencode 'query={service_name="catalog-service"}'
+uv run --with pyyaml python scripts/validate_slo.py slo/*.yaml
+uv run --with pyyaml python scripts/build_prometheus_rules.py
+uv run --with pyyaml python scripts/verify_mwmb.py
+uv run scripts/validate_observability_contract.py
+promtool check rules observability/prometheus-rules/alert_rules.yaml \
+  observability/prometheus-rules/sli_recording_rules.yaml
+promtool test rules observability/prometheus-rules/*_test.yaml
+bash scripts/test_script_validation_edges.sh
+bash scripts/test_verify.sh
 ```
 
-Prometheus listens on container port `9090`, but its Kubernetes Service exposes
-port `80`. Use `http://prometheus.observability:80` from inside the cluster;
-`http://localhost:9090` is the host-side forwarded endpoint shown above.
+Regeneration must leave no diff in the two generated rule files.
 
-## Build and Push Service Images
+## Load and demo
+
+Exactly four reusable profiles exist: smoke, load, stress, and spike. Their
+Jobs run in `load`, while application Services run in `ecom`.
 
 ```bash
-docker buildx bake
+make -C load load-smoke
+kubectl -n load wait --for=condition=complete job/k6-smoke --timeout=120s
+kubectl -n load logs job/k6-smoke
+make -C load clean
 ```
 
-Or build a single service:
+`make demo` uses the load profile plus existing Chaos Mesh experiments. Its k6
+Job exit, alert/chaos correlation, postmortem validation, and bounded cleanup
+are authoritative. It never fabricates success or weakens a failed threshold.
 
-```bash
-docker build -t k3d-observability-registry:5000/catalog-service:dev services/catalog-service
-docker push k3d-observability-registry:5000/catalog-service:dev
-```
+## Storage changes and reset
 
-## Run a Smoke Test
-
-```bash
-kubectl apply -f load/k6-job-smoke.yaml
-kubectl wait -n ecom job/k6-smoke --for=condition=complete --timeout=120s
-kubectl logs -n ecom job/k6-smoke
-```
-
-## Tear Down
+Kubernetes does not apply every PVC field change in place. Retention or size
+changes must be planned with the data lifecycle. For a disposable local reset:
 
 ```bash
 make down
+make up
 ```
 
-`make down` performs, in order:
+Deleting Prometheus, Loki, or Tempo PVCs permanently deletes local telemetry.
+There is no automatic backup or in-place migration promise.
 
-1. `helm uninstall` for every observability release (`otel-collector`, `tempo`,
-   `loki`, `prometheus`, `grafana`) and every service release. Both groups use
-   `--ignore-not-found`, so partial teardowns are idempotent.
-2. `kubectl delete namespace` for `ecom`, `load`, `chaos-testing`, `incident`.
-3. `terraform -chdir=infra/cluster destroy -auto-approve` — removes the k3d
-   cluster and the local registry.
-
-If you only want to wipe local state (for a fresh `make up`), without touching
-the cluster:
-
-```bash
-make clean
-```
-
-`make clean` removes the Terraform state files, the devenv cache, and any
-`tmp-*` evidence files. The cluster, registry, and Helm releases are
-untouched.
+`make down` is idempotent and removes project releases, namespaces, the owned
+k3d cluster, registry, containers, network, volumes, kubeconfig, load Jobs,
+and port-forward processes. It refuses to auto-delete an unknown cluster whose
+identity does not match the project contract. `make clean` only removes
+repository-local generated/cache artifacts and is not a cluster teardown.
 
 ## Troubleshooting
 
-- **k3d cluster fails to create**: ensure Docker has at least 6 GB RAM and that ports 3000, 9090, 9093, 3200, and 3100 are free.
-- **Helm chart not found**: run `helm repo update`.
-- **Image pull errors**: verify the image was pushed to `k3d-observability-registry:5000/<service>:dev` and that the registry container is running.
-- **Pods stuck Pending**: check resource requests and node capacity with `kubectl describe node`.
-- **`scripts/verify.sh` keeps reporting DEFERRED for checks 5–10**: the
-  observability stack has been charted but not yet installed. Run `make up`
-  end-to-end and re-run `make verify`.
-- **`scripts/verify.sh` reports `FAIL` on a single service `/healthz`** (check 4):
-  this is a real failure on the target pod (often a port-not-listening or
-  readiness-probe mismatch), not a script bug. Inspect with
-  `kubectl describe pod -n ecom <pod>` and `kubectl logs -n ecom <pod>`.
-
-## Pre-commit
-
-`scripts/verify.sh` is required to pass `bash -n` (syntax) and `shellcheck`
-before being committed. From the repo root:
-
-```bash
-bash -n scripts/verify.sh                                  # syntax
-shellcheck scripts/verify.sh                               # lint (install via nix)
-```
+- **Cluster creation fails:** confirm Docker capacity and capture the k3d/K3s
+  versions before changing a pin.
+- **Registry pull fails:** inspect the current registry host/port and CoreDNS
+  rewrite; do not substitute a floating image tag.
+- **A 30-day record has no value:** confirm traffic exists and Prometheus
+  runtime retention is 31 days; a new deployment cannot synthesize history.
+- **Logs are absent:** compare `otel-collector-agent` desired/ready counts and
+  query Loki's `service_name` label values.
+- **A RED panel is empty:** query the exact canonical histogram and resource
+  labels; dashboards intentionally do not turn missing data into zero.

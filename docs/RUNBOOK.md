@@ -2,6 +2,10 @@
 
 Operational playbooks for the Enten v2 observability platform.
 
+Commands below that use `127.0.0.1:3000`, `:9090`, or `:9093` assume the
+matching `kubectl port-forward` from [SETUP.md](./SETUP.md) is running. The
+platform Services are not permanently exposed on the host.
+
 ## Common Operations
 
 ### A service is down
@@ -42,7 +46,8 @@ Symptoms: `ServiceDown` alert fires; Grafana shows target missing; `/healthz` do
 
    ```bash
    kubectl rollout status deployment/<service> -n ecom
-   curl -s http://localhost:<port>/healthz
+   kubectl -n ecom port-forward svc/<service> <port>:<port>
+   curl -fsS http://127.0.0.1:<port>/healthz
    ```
 
 ### An alert is firing
@@ -52,14 +57,15 @@ Symptoms: Alertmanager UI shows an alert; PagerDuty/Slack notification; Grafana 
 1. Identify the alert:
 
    ```bash
-   curl -s http://localhost:9093/api/v1/alerts | jq '.data[].labels.alertname'
+   curl -fsS http://127.0.0.1:9093/api/v2/alerts | jq '.[].labels.alertname'
    ```
 
 2. Find the affected service and SLO kind from the alert labels.
 3. Query Prometheus for the underlying SLI:
 
    ```bash
-   curl -s "http://localhost:9090/api/v1/query?query=sli:<service>:<slo_kind>:ratio_1h" | jq
+   curl -fsS -G http://127.0.0.1:9090/api/v1/query \
+     --data-urlencode 'query={__name__="sli:<service>:<slo_kind>:ratio_1h"}' | jq
    ```
 
 4. Look at the RED dashboard in Grafana for that service.
@@ -93,13 +99,13 @@ Symptoms: Alert fired but no new Markdown file appears in `docs/examples/postmor
 3. Check Alertmanager status:
 
    ```bash
-   curl -s http://localhost:9093/api/v1/status | jq
+   curl -fsS http://127.0.0.1:9093/api/v2/status | jq
    ```
 
 4. Confirm the route points to `incident-engine`:
 
    ```bash
-   curl -s http://localhost:9093/api/v1/routes | jq '.[].receiver'
+   curl -fsS http://127.0.0.1:9093/api/v2/status | jq -r '.config.original'
    ```
 
 5. Restart the incident engine if the webhook handler panicked:
@@ -159,17 +165,18 @@ Symptoms: Prometheus pod is in `Evicted` or `CrashLoopBackOff`; disk pressure wa
    kubectl describe node | grep -A 5 "Conditions"
    ```
 
-3. Reduce retention in `infra/prometheus/helm-values.yaml` if needed.
+3. Do not reduce retention below 31 days: every SLO has a 30-day ratio and
+   budget dependency. Increase storage or reduce metric cardinality instead.
 
-4. Scale Prometheus down, clear the volume, and scale back up. This loses historical data.
+4. For a disposable local reset, tear down and recreate the project. This
+   permanently deletes local metrics, logs, and traces.
 
    ```bash
-   kubectl scale deployment/prometheus-server -n observability --replicas=0
-   kubectl delete pvc -n observability prometheus-server
-   kubectl scale deployment/prometheus-server -n observability --replicas=1
+   make down
+   make up
    ```
 
-5. Longer term: increase the PVC size or ship blocks to object storage.
+5. Enten does not claim object-storage backup or in-place PVC migration.
 
 ## Cookbooks
 
@@ -177,14 +184,20 @@ Symptoms: Prometheus pod is in `Evicted` or `CrashLoopBackOff`; disk pressure wa
 
 1. Create a service directory under `services/<new-service>/`.
 2. Add the application code, Dockerfile, `pyproject.toml` or `go.mod`, and tests.
-3. Instrument the service with OpenTelemetry and point it at the Collector endpoint.
+3. Export traces and the canonical
+   `http_server_request_duration_seconds_{bucket,count,sum}` series through
+   OTLP. Use `service_name`, `service_namespace`,
+   `http_response_status_code`, and low-cardinality `http_route` labels.
+   Write application logs to stdout/stderr for the node log agents.
 4. Create a Helm chart under `charts/<new-service>/`.
-5. Add a ServiceMonitor or pod annotations so Prometheus scrapes metrics.
+5. Do not add a second scrape path. Payment's direct scrape is the bounded
+   exception for its existing no-new-dependency constraint.
 6. Add an SLO file under `slo/<new-service>.yaml`.
 7. Rebuild Prometheus rules:
 
    ```bash
    uv run --with pyyaml python scripts/build_prometheus_rules.py
+   uv run scripts/validate_observability_contract.py
    kubectl apply -k observability/prometheus-rules
    ```
 
@@ -225,7 +238,8 @@ Symptoms: Prometheus pod is in `Evicted` or `CrashLoopBackOff`; disk pressure wa
    kubectl apply -k observability/prometheus-rules
    ```
 
-7. Verify the new recording rules appear at `http://localhost:9090/rules`.
+7. With the Prometheus forward running, verify the new recording rules at
+   `http://127.0.0.1:9090/rules` and query the exact service-qualified record.
 
 ### How to add a new chaos experiment
 
