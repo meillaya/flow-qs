@@ -70,9 +70,10 @@ kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
 ├── Makefile                    # up, down, demo, lint, test
 ├── devenv.nix / devenv.yaml    # Reproducible dev shell
 ├── infra/                      # Terraform k3d cluster + OTel/Tempo/Loki/Prom/Grafana configs
-├── services/                   # catalog, inventory, cart, checkout, order, payment-gateway
+├── services/                   # Six product services + synthetic monitor + incident engine
 ├── charts/                     # Per-service Helm charts
-├── observability/              # Dashboards and Prometheus rules
+├── dashboards/                 # Provisioned Grafana dashboards
+├── observability/              # Prometheus rules and Alertmanager templates
 ├── slo/                        # SLO definitions
 ├── chaos/                      # Chaos Mesh experiments
 ├── load/                       # k6 scripts and Kubernetes Jobs
