@@ -357,10 +357,9 @@ async def _process_alert_serialized(
     alertname, service, severity, slo, starts_at, ends_at, fingerprint = _parse_alert(alert)
     received_at = datetime.now(UTC)
     is_resolved = payload_status == "resolved" or alert.status == "resolved"
+    has_explicit_end = ends_at is not None
     if not is_resolved:
         ends_at = None
-    elif ends_at is None:
-        ends_at = received_at
 
     incident_id = uuid.uuid5(
         uuid.NAMESPACE_OID,
@@ -371,10 +370,17 @@ async def _process_alert_serialized(
         timeline_events = [TimelineEvent(**event) for event in existing.timeline]
         markdown = render_postmortem(existing, timeline_events)
         return existing, timeline_events, markdown
-    if is_resolved and existing is not None and existing.ends_at:
-        previous_ends_at = parse_iso(existing.ends_at)
-        if ends_at is None or ends_at < previous_ends_at:
-            ends_at = previous_ends_at
+    if is_resolved:
+        if not has_explicit_end:
+            ends_at = (
+                parse_iso(existing.ends_at)
+                if existing is not None and existing.ends_at
+                else received_at
+            )
+        elif existing is not None and existing.ends_at:
+            previous_ends_at = parse_iso(existing.ends_at)
+            if ends_at is not None and ends_at < previous_ends_at:
+                ends_at = previous_ends_at
 
     now = received_at
     lookback_end = min(ends_at or now, now)

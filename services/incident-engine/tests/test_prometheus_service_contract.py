@@ -43,7 +43,7 @@ def test_chart_renders_prometheus_service_port() -> None:
 async def test_prometheus_query_uses_service_port_80() -> None:
     route = respx.get(f"{PROMETHEUS_SERVICE_URL}/api/v1/query_range").respond(
         200,
-        json={"status": "success", "data": {"result": []}},
+        json={"status": "success", "data": {"resultType": "matrix", "result": []}},
     )
     start = datetime.now(tz=UTC) - timedelta(minutes=5)
     end = datetime.now(tz=UTC)

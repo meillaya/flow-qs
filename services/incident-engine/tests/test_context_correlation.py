@@ -70,7 +70,9 @@ async def test_fetches_tempo_contract_and_exact_trace_correlated_loki_log() -> N
         ]
     }
     loki_payload = {
+        "status": "success",
         "data": {
+            "resultType": "streams",
             "result": [
                 {
                     "stream": {
@@ -118,7 +120,37 @@ async def test_non_object_tempo_payload_degrades_to_empty_context() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("payload", [[], {"data": {"result": [42]}}])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"data": {"result": [42]}},
+        {
+            "status": "error",
+            "data": {
+                "resultType": "streams",
+                "result": [
+                    {
+                        "stream": {"service_name": "checkout-service"},
+                        "values": [["1783751446180740096", "should be rejected"]],
+                    }
+                ],
+            },
+        },
+        {
+            "status": "success",
+            "data": {
+                "resultType": "vector",
+                "result": [
+                    {
+                        "stream": {"service_name": "checkout-service"},
+                        "values": [["1783751446180740096", "should be rejected"]],
+                    }
+                ],
+            },
+        },
+    ],
+)
 async def test_malformed_loki_schema_degrades_to_empty_context(payload: Any) -> None:
     """Valid JSON with an invalid Loki schema cannot fail incident ingestion."""
     now = datetime.now(UTC)
@@ -154,7 +186,10 @@ async def test_fetches_checkout_synthetic_prometheus_value_without_invalid_escap
                     "values": [[1783751446, "NaN"]],
                 },
             ]
-        return httpx.Response(200, json={"data": {"result": result}})
+        return httpx.Response(
+            200,
+            json={"status": "success", "data": {"resultType": "matrix", "result": result}},
+        )
 
     async with httpx.AsyncClient() as client:
         context = HTTPXUpstreamContext(
@@ -168,6 +203,37 @@ async def test_fetches_checkout_synthetic_prometheus_value_without_invalid_escap
     assert len(snapshots) == 1
     assert snapshots[0].name == "synthetic_check_success"
     assert snapshots[0].value == 0
+
+
+@pytest.mark.asyncio
+async def test_prometheus_error_or_wrong_type_degrades_to_empty_context() -> None:
+    """API-declared errors and non-matrix results cannot become metric evidence."""
+    now = datetime.now(UTC)
+    payloads = [
+        {
+            "status": "error",
+            "data": {
+                "resultType": "matrix",
+                "result": [{"metric": {}, "values": [[1783751446, "1"]]}],
+            },
+        },
+        {
+            "status": "success",
+            "data": {
+                "resultType": "vector",
+                "result": [{"metric": {}, "values": [[1783751446, "1"]]}],
+            },
+        },
+    ]
+    async with httpx.AsyncClient() as client:
+        context = HTTPXUpstreamContext(
+            "http://tempo.test", "http://loki.test", "http://prom.test", client=client
+        )
+        for payload in payloads:
+            with respx.mock as router:
+                router.get("http://prom.test/api/v1/query_range").respond(json=payload)
+                snapshots = await context.fetch_metrics("checkout-service", now, now)
+            assert snapshots == []
 
 
 def test_timeline_exposes_trace_id_and_honest_empty_backends() -> None:

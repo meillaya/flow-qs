@@ -516,10 +516,16 @@ def test_resolved_webhook_without_end_time_uses_receipt_time(
             json=AlertmanagerPayload(status="resolved", alerts=[alert]).model_dump(),
         )
         incident_id = response.json()["incidents"][0]
+        first_detail = client.get(f"/incidents/{incident_id}").json()
+        client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="resolved", alerts=[alert]).model_dump(),
+        )
         detail = client.get(f"/incidents/{incident_id}").json()
 
     assert detail["status"] == "resolved"
     assert detail["ends_at"] is not None
+    assert detail["ends_at"] == first_detail["ends_at"]
     assert "still being tracked" not in detail["summary"]
     assert any("resolved" in event["message"] for event in detail["timeline"])
 

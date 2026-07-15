@@ -196,9 +196,13 @@ class HTTPXUpstreamContext:
         if not isinstance(data, dict):
             logger.warning("loki fetch failed: response is not an object")
             return []
+        if data.get("status") != "success":
+            return []
         payload = data.get("data")
         if not isinstance(payload, dict):
             logger.warning("loki fetch failed: data is not an object")
+            return []
+        if payload.get("resultType") != "streams":
             return []
         streams = payload.get("result") or []
         if not isinstance(streams, list):
@@ -271,8 +275,12 @@ class HTTPXUpstreamContext:
                 continue
             if not isinstance(data, dict):
                 continue
+            if data.get("status") != "success":
+                continue
             payload = data.get("data")
             if not isinstance(payload, dict):
+                continue
+            if payload.get("resultType") != "matrix":
                 continue
             results = payload.get("result") or []
             if not isinstance(results, list):
