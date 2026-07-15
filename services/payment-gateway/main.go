@@ -19,6 +19,7 @@ import (
 
 	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
 	"github.com/example/payment-gateway/internal/handlers"
+	"github.com/example/payment-gateway/internal/metrics"
 	"github.com/example/payment-gateway/internal/otel"
 	"github.com/example/payment-gateway/internal/payment"
 	"github.com/example/payment-gateway/internal/server"
@@ -56,9 +57,12 @@ func main() {
 
 	httpPort := getEnv("HTTP_PORT", "8005")
 	r := chi.NewRouter()
+	metricRegistry := metrics.NewRegistry("payment-gateway")
+	r.Use(metricRegistry.Middleware)
 	r.Use(otelhttp.NewMiddleware("payment-gateway"))
 	r.Get("/healthz", handlers.HealthzHandler)
 	r.Get("/readyz", handlers.ReadyzHandler)
+	r.Get("/metrics", metricRegistry.Handler().ServeHTTP)
 	r.Post("/charge", handlers.ChargeHandler(store))
 
 	httpServer := &http.Server{

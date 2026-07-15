@@ -6,6 +6,7 @@ when the process restarts — this is an intentional demo limitation, not a bug.
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated, TypedDict
@@ -14,6 +15,8 @@ from fastapi import FastAPI, Path
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from pydantic import BaseModel, Field
+
+from app.http_metrics import HTTPMetrics
 
 
 class CartItemDict(TypedDict):
@@ -81,7 +84,10 @@ def _to_response(user_id: str, items: list[CartItemDict]) -> CartResponse:
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: state is already in memory."""
-    yield
+    try:
+        yield
+    finally:
+        http_metrics.shutdown()
 
 
 RequestsInstrumentor().instrument()
@@ -92,6 +98,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+http_metrics = HTTPMetrics(os.getenv("OTEL_SERVICE_NAME", "cart-service"))
+app.middleware("http")(http_metrics.middleware)
 FastAPIInstrumentor.instrument_app(app)
 
 

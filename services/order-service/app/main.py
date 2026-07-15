@@ -18,6 +18,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 
+from app.http_metrics import HTTPMetrics
 from app.models import OrderCreateRequest
 from app.payment_client import get_payment_status
 
@@ -95,10 +96,15 @@ def _get_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _init_db()
-    yield
+    try:
+        yield
+    finally:
+        http_metrics.shutdown()
 
 
 app = FastAPI(title="order-service", lifespan=lifespan)
+http_metrics = HTTPMetrics(OTEL_SERVICE_NAME)
+app.middleware("http")(http_metrics.middleware)
 FastAPIInstrumentor.instrument_app(app)
 
 

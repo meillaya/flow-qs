@@ -43,6 +43,7 @@ import app.grpc_gen.inventory_pb2 as inventory_pb2
 import app.grpc_gen.inventory_pb2_grpc as inventory_pb2_grpc
 from app.db import get_inventory, init_db, list_inventory, release_stock, reserve_stock
 from app.grpc_server import InventoryServicer
+from app.http_metrics import HTTPMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +67,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     server.add_insecure_port("[::]:50051")
     await server.start()
     logger.info("gRPC server listening on port 50051")
-    yield
-    logger.info("Shutting down gRPC server")
-    await server.stop(5)
+    try:
+        yield
+    finally:
+        logger.info("Shutting down gRPC server")
+        await server.stop(5)
+        http_metrics.shutdown()
 
 
 app = FastAPI(title="Inventory Service", lifespan=lifespan)
+http_metrics = HTTPMetrics(os.getenv("OTEL_SERVICE_NAME", "inventory-service"))
+app.middleware("http")(http_metrics.middleware)
 
 
 @app.get("/healthz")
