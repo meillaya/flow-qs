@@ -10,7 +10,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from app.clients import HTTPXUpstreamContext, StaticUpstreamContext
+from app.clients import HTTPXUpstreamContext, StaticUpstreamContext, TraceHit
 from app.main import AlertmanagerAlert, AlertmanagerPayload, create_app
 from app.storage import IncidentStore
 from app.timeline import build_timeline
@@ -106,6 +106,23 @@ def test_timeline_exposes_trace_id_and_honest_empty_backends() -> None:
     assert "No Tempo traces returned for the incident window" in messages
     assert "No Loki logs returned for the incident window" in messages
     assert "No Prometheus samples returned for the incident window" in messages
+
+
+def test_timeline_orders_offset_timestamps_by_instant() -> None:
+    """Timeline order follows instants rather than ISO string prefixes."""
+    started = datetime(2026, 1, 2, 0, 0, tzinfo=UTC)
+    trace = TraceHit(
+        trace_id="offset-trace",
+        root_service="checkout-service",
+        start_time="2026-01-02T01:00:00+02:00",
+    )
+
+    events = build_timeline(
+        started, None, "checkout-service", "ServiceDown", [trace], [], []
+    )
+    instants = [datetime.fromisoformat(event.timestamp) for event in events]
+
+    assert instants == sorted(instants)
 
 
 def test_webhook_preserves_original_start_outside_correlation_horizon(

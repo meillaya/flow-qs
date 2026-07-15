@@ -193,7 +193,7 @@ def build_timeline(
             )
         )
 
-    events.sort(key=lambda e: e.timestamp)
+    events.sort(key=lambda event: _parse_loose_iso(event.timestamp))
     return events
 
 

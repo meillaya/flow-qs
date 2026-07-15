@@ -483,7 +483,7 @@ async def test_firing_webhook_ignores_alertmanager_zero_ends_at(
 
 
 def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context) -> None:
-    """An out-of-order firing retry cannot reopen a resolved incident."""
+    """An out-of-order firing retry cannot reopen or contaminate a resolved incident."""
     reset_chaos_state()
     app = create_app(context=static_context)
     alert = _make_alert("RecoveredAlert", "cart-service")
@@ -499,6 +499,24 @@ def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context
             "/webhook",
             json=AlertmanagerPayload(status="resolved", alerts=[resolved]).model_dump(),
         )
+        resolved_detail = client.get(f"/incidents/{incident_id}").json()
+        static_context.traces = [
+            TraceHit(
+                trace_id="post-resolution-trace",
+                root_service="cart-service",
+                duration_ms=99.0,
+                start_time="2026-07-09T22:00:00+00:00",
+            )
+        ]
+        register_chaos_experiment(
+            {
+                "name": "post-resolution-chaos",
+                "namespace": "default",
+                "kind": "PodChaos",
+                "target_service": "cart-service",
+                "started_at": "2026-07-09T22:00:00+00:00",
+            }
+        )
         client.post(
             "/webhook",
             json=AlertmanagerPayload(status="firing", alerts=[alert]).model_dump(),
@@ -507,6 +525,8 @@ def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context
 
     assert detail["status"] == "resolved"
     assert detail["ends_at"] == alert.endsAt
+    assert detail["timeline"] == resolved_detail["timeline"]
+    assert detail["correlated_chaos"] == resolved_detail["correlated_chaos"]
 
 
 def test_webhook_rejects_unbounded_alert_batches(temp_paths, static_context) -> None:

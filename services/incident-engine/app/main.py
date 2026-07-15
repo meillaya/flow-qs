@@ -307,6 +307,16 @@ async def _process_alert(
     if not is_resolved:
         ends_at = None
 
+    incident_id = uuid.uuid5(
+        uuid.NAMESPACE_OID,
+        f"{fingerprint}:{starts_at.isoformat()}",
+    ).hex
+    existing = state.store.get(incident_id)
+    if existing is not None and existing.status == "resolved" and not is_resolved:
+        timeline_events = [TimelineEvent(**event) for event in existing.timeline]
+        markdown = render_postmortem(existing, timeline_events)
+        return existing, timeline_events, markdown
+
     now = datetime.now(UTC)
     lookback_end = min(ends_at or now, now)
     earliest_start = lookback_end - CORRELATION_HORIZON
@@ -331,25 +341,14 @@ async def _process_alert(
         else _chaos_state_snapshot()
     )
     correlated = correlate_chaos(service, experiments, correlation_starts_at)
-    incident_id = uuid.uuid5(
-        uuid.NAMESPACE_OID,
-        f"{fingerprint}:{starts_at.isoformat()}",
-    ).hex
-    existing = state.store.get(incident_id)
     authoritative_chaos = (
         existing.correlated_chaos
         if existing is not None and existing.correlated_chaos
         else correlated
     )
-    stale_firing = existing is not None and existing.status == "resolved" and not is_resolved
-    effective_ends_at = (
-        parse_iso(existing.ends_at)
-        if stale_firing and existing is not None and existing.ends_at
-        else ends_at
-    )
     timeline_events = build_timeline(
         alert_starts_at=starts_at,
-        alert_ends_at=effective_ends_at,
+        alert_ends_at=ends_at,
         service=service,
         alertname=alertname,
         traces=traces,
@@ -358,22 +357,22 @@ async def _process_alert(
         chaos_experiments=authoritative_chaos,
     )
 
-    record_status = "resolved" if is_resolved or stale_firing else "firing"
+    record_status = "resolved" if is_resolved else "firing"
 
     now = datetime.now(UTC).isoformat()
     if existing is not None:
         # Update mutable fields only; preserve created_at.
         existing.status = record_status
         existing.updated_at = now
-        existing.ends_at = (
-            effective_ends_at.isoformat() if effective_ends_at else existing.ends_at
-        )
+        existing.ends_at = ends_at.isoformat() if ends_at else existing.ends_at
         previous_events = [TimelineEvent(**event) for event in existing.timeline]
         unique_events = {
             (event.timestamp, event.source, event.message): event
             for event in [*previous_events, *timeline_events]
         }
-        timeline_events = sorted(unique_events.values(), key=lambda event: event.timestamp)
+        timeline_events = sorted(
+            unique_events.values(), key=lambda event: parse_iso(event.timestamp)
+        )
         existing.timeline = [event.to_dict() for event in timeline_events]
         existing.correlated_chaos = authoritative_chaos
         record = existing
