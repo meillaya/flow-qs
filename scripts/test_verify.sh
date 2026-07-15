@@ -56,6 +56,19 @@ case " $* " in
             empty) : ;;
         esac
         ;;
+    *" get daemonset otel-collector-agent "*)
+        case "${MOCK_AGENT_STATE:-valid}" in
+            valid) printf '%s\n' '{"status":{"desiredNumberScheduled":2,"numberReady":2}}' ;;
+            one_of_two) printf '%s\n' '{"status":{"desiredNumberScheduled":2,"numberReady":1}}' ;;
+            malformed) printf '%s\n' '{"status":{"desiredNumberScheduled":"2","numberReady":null}}' ;;
+        esac
+        ;;
+    *" get deployments -A -o json "*)
+        case "${MOCK_IMAGE_STATE:-valid}" in
+            valid) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"catalog-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/catalog-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"checkout-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/checkout-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"inventory-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/inventory-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"order-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/order-service:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"payment-gateway"},"spec":{"template":{"spec":{"containers":[{"image":"registry/payment-gateway:0123456789ab"}]}}}},{"metadata":{"namespace":"ecom","name":"synthetic-monitor"},"spec":{"template":{"spec":{"containers":[{"image":"registry/synthetic-monitor:0123456789ab"}]}}}},{"metadata":{"namespace":"incident","name":"incident-engine"},"spec":{"template":{"spec":{"containers":[{"image":"registry/incident-engine:0123456789ab"}]}}}}]}' ;;
+            mutable) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:dev"}]}}}}]}' ;;
+        esac
+        ;;
     *" get svc ${MOCK_MISSING_SERVICE:-__none__} "*) exit 1 ;;
     *" get svc prometheus-operated "*) exit 1 ;;
     *" get svc prometheus "*|*" get svc loki "*|*" get svc grafana "*|*" get svc otel-collector "*|*" get svc tempo "*) exit 0 ;;
@@ -110,6 +123,8 @@ case "${url}" in
     */loki/api/v1/query_range)
         if [[ "${MOCK_FAILURE:-}" == loki ]]; then
             body='{"status":"error","data":{"result":[]}}'
+        elif [[ "${query}" == *'service_name=~"cart-service|'* ]]; then
+            body='{"status":"success","data":{"resultType":"streams","result":[{"stream":{"service_name":"cart-service"},"values":[["1","log"]]},{"stream":{"service_name":"catalog-service"},"values":[["1","log"]]},{"stream":{"service_name":"checkout-service"},"values":[["1","log"]]},{"stream":{"service_name":"inventory-service"},"values":[["1","log"]]},{"stream":{"service_name":"order-service"},"values":[["1","log"]]},{"stream":{"service_name":"payment-gateway"},"values":[["1","log"]]},{"stream":{"service_name":"synthetic-monitor"},"values":[["1","log"]]},{"stream":{"service_name":"incident-engine"},"values":[["1","log"]]}]}}'
         elif [[ "${query}" =~ ^query=\{job=\"verify-sh-[0-9]+\"\}$ ]]; then
             body='{"status":"success","data":{"resultType":"streams","result":[{"stream":{"job":"verify"},"values":[["1","hello"]]}]}}'
         else
@@ -124,8 +139,23 @@ case "${url}" in
     */api/v1/query)
         if [[ "${MOCK_FAILURE:-}" == prometheus ]]; then
             body='{"status":"success","data":{"result":"not-an-array"}}'
+        elif [[ "${query}" == *http_server_request_duration_seconds_count* ]]; then
+            body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"6"]}]}}'
+        elif [[ "${query}" == *'sli:.*:availability:ratio_5m'* ]]; then
+            body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"7"]}]}}'
+        elif [[ "${query}" == *'up{job="payment-gateway"}'* ]]; then
+            body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{"job":"payment-gateway"},"value":[1,"1"]}]}}'
+        elif [[ "${query}" == *traces_service_graph_request_total* ]]; then
+            body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"1"]}]}}'
         else
             body='{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1,"1"]}]}}'
+        fi
+        ;;
+    */api/datasources)
+        if [[ "${MOCK_FAILURE:-}" == grafana_datasources ]]; then
+            body='[{"name":"Prometheus"},{"name":"Tempo"},{"name":"Loki"}]'
+        else
+            body='[{"name":"Prometheus"},{"name":"Tempo"},{"name":"Loki"},{"name":"Alertmanager"}]'
         fi
         ;;
     */api/v1/rules)
@@ -159,6 +189,10 @@ case "${url}" in
     */api/dashboards/uid/svc-overview)
         code=404
         body='{"message":"Dashboard not found"}'
+        ;;
+    */api/dashboards/uid/*)
+        uid="${url##*/}"
+        body="{\"dashboard\":{\"uid\":\"${uid}\"}}"
         ;;
     */ready|*/-/ready)
         body='ready'
@@ -201,6 +235,7 @@ assert_status() {
 run_check() {
     local check="$1" invalid_rules="${2:-0}" mock_failure="${3:-}" grafana_body="${4:-}"
     local collector_state="${5:-valid}" missing_service="${6:-}" pod_state="${7:-valid}"
+    local image_state="${8:-valid}"
     : >"${TMP_DIR}/kubectl-${check}.log"
     : >"${TMP_DIR}/kubectl-${check}.pids"
     : >"${TMP_DIR}/curl-${check}.log"
@@ -217,6 +252,7 @@ run_check() {
         MOCK_COLLECTOR_STATE="${collector_state}" \
         MOCK_MISSING_SERVICE="${missing_service}" \
         MOCK_POD_STATE="${pod_state}" \
+        MOCK_IMAGE_STATE="${image_state}" \
         bash "${VERIFY}" "${check}" >"${TMP_DIR}/check-${check}-${invalid_rules}.out" 2>&1
     RUN_STATUS=$?
     set -e
@@ -302,7 +338,12 @@ PY
 }
 
 run_check 3
-assert_status "${RUN_STATUS}" 0 "Collector readiness accepts exactly 2/2 desired and ready replicas"
+assert_status "${RUN_STATUS}" 0 "Collector and log-agent readiness accept desired equals ready"
+assert_contains "${TMP_DIR}/kubectl-3.log" "get daemonset otel-collector-agent" "Readiness verifies the node log-agent DaemonSet"
+assert_contains "${TMP_DIR}/kubectl-3.log" "get deployments -A -o json" "Readiness verifies eight immutable workload images"
+
+run_check 3 0 '' '' valid '' valid mutable
+assert_status "${RUN_STATUS}" 1 "Readiness rejects mutable or incomplete workload images"
 
 for pod_state in one_of_three two_of_three malformed; do
     run_check 3 0 '' '' valid '' "${pod_state}"
@@ -321,21 +362,32 @@ run_check 6
 assert_status "${RUN_STATUS}" 0 "Loki push/range-query check passes"
 assert_contains "${TMP_DIR}/curl-6.log" "/loki/api/v1/query_range" "Loki uses the range-query API"
 assert_contains "${TMP_DIR}/curl-6.log" 'data-urlencode=query={job="verify-sh-' "Loki sends LogQL through --data-urlencode"
+assert_contains "${TMP_DIR}/curl-6.log" 'service_name=~"cart-service|' "Loki verifies real container-log identities"
 
 run_check 6 0 loki
 assert_status "${RUN_STATUS}" 1 "Loki check fails closed on an API error payload"
 
 run_check 7
-assert_status "${RUN_STATUS}" 0 "Prometheus metric check passes with a valid API payload"
+assert_status "${RUN_STATUS}" 0 "Prometheus product metric checks pass with complete API payloads"
 assert_contains "${TMP_DIR}/kubectl-7.log" "port-forward svc/prometheus " "Prometheus Service is selected"
 assert_contains "${TMP_DIR}/kubectl-7.log" ":80" "Prometheus forwards the rendered Service port 80"
+assert_contains "${TMP_DIR}/curl-7.log" "http_server_request_duration_seconds_count" "Prometheus verifies the canonical histogram for six services"
+assert_contains "${TMP_DIR}/curl-7.log" 'sli:.*:availability:ratio_5m' "Prometheus verifies seven generated SLO records"
+assert_contains "${TMP_DIR}/curl-7.log" 'up{job="payment-gateway"}' "Prometheus verifies the payment scrape target"
+assert_contains "${TMP_DIR}/curl-7.log" 'traces_service_graph_request_total' "Prometheus verifies a servicegraph edge"
 
 run_check 7 0 prometheus
 assert_status "${RUN_STATUS}" 1 "Prometheus metric check fails closed on a malformed result"
 
 run_check 9
-assert_status "${RUN_STATUS}" 0 "Grafana dashboard check passes"
-assert_contains "${TMP_DIR}/curl-9.log" "/api/dashboards/uid/service-overview" "Grafana uses the provisioned dashboard UID"
+assert_status "${RUN_STATUS}" 0 "All Grafana dashboard checks pass"
+assert_status "$(grep -c '/api/dashboards/uid/' "${TMP_DIR}/curl-9.log")" 10 "Grafana verifies all 10 provisioned dashboard UIDs"
+
+run_check 8
+assert_status "${RUN_STATUS}" 0 "Grafana accepts exactly four provisioned datasources"
+
+run_check 8 0 grafana_datasources
+assert_status "${RUN_STATUS}" 1 "Grafana rejects an incomplete datasource set"
 
 run_check 9 0 grafana
 assert_status "${RUN_STATUS}" 1 "Grafana dashboard check fails closed on HTTP 404"
