@@ -12,7 +12,7 @@ graph TB
 
     subgraph Services["E-commerce Services (ecom namespace)"]
         catalog[catalog-service<br/>Python/FastAPI :8000]
-        inventory[inventory-service<br/>Python/gRPC :50051]
+        inventory[inventory-service<br/>Python/FastAPI :8001 + gRPC :50051]
         cart[cart-service<br/>Python/FastAPI :8002]
         checkout[checkout-service<br/>Python/FastAPI :8003]
         order[order-service<br/>Python/FastAPI :8004]
@@ -79,7 +79,7 @@ graph TB
 | Service | Language | Runtime | Responsibility |
 |---------|----------|---------|----------------|
 | catalog-service | Python | FastAPI :8000 | Product catalog: list, search, get, create products. SQLite backend. |
-| inventory-service | Python | FastAPI + gRPC :50051 | Stock reservation and release. SQLite backend. |
+| inventory-service | Python | FastAPI :8001 + gRPC :50051 | Stock reservation and release. SQLite backend. |
 | cart-service | Python | FastAPI :8002 | In-memory shopping cart. |
 | checkout-service | Python | FastAPI :8003 | Saga orchestrator: cart, inventory, payment, order. Compensation on failure. |
 | order-service | Python | FastAPI :8004 | Order persistence. SQLite backend. |
