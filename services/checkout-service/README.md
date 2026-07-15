@@ -28,7 +28,7 @@ POST /checkout  --[cart HTTP]-> cart-service
 | Env var | Default | Purpose |
 |---------|---------|---------|
 | `CHECKOUT_HTTP_PORT` | 8003 | HTTP listen port |
-| `CART_SERVICE_URL` | `http://cart-service:8000` | cart HTTP base URL |
+| `CART_SERVICE_URL` | `http://cart-service:8002` | cart HTTP base URL |
 | `ORDER_SERVICE_URL` | `http://order-service:8004` | order HTTP base URL |
 | `INVENTORY_GRPC_ADDR` | `inventory-service:50051` | inventory gRPC address |
 | `PAYMENT_GRPC_ADDR` | `payment-gateway:50052` | payment gRPC address |

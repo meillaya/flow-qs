@@ -94,7 +94,7 @@ make clean       # make down + remove Terraform/devenv local state
 
 ## Learnings
 
-- Keep the OTel Collector pipeline as the single source of truth; mirror it into Helm values to avoid drift.
+- Keep the gateway and node-agent Collector pipelines in Helm values as the single deployed source of truth.
 - Collect Kubernetes container logs with one node agent per schedulable node; keep stateful servicegraph processing on the single local-demo gateway.
 - Use `http_server_request_duration_seconds_{bucket,count,sum}` with `service_name`, `service_namespace`, `http_response_status_code`, and `http_route` as the stable RED contract. Payment uses the same schema through its bounded Prometheus scrape exception.
 - Use provisioned Grafana JSON dashboards and Alertmanager YAML so the stack is reproducible without click-ops.
