@@ -247,6 +247,8 @@ main() {
 
   case_dir="$suite/foreign-kubeconfig"; make_fakes "$case_dir"; printf 'foreign\n' >"$case_dir/home/.kube/config"; run_case "$case_dir" 1 0 "$case_dir/home/.kube/config"; test -f "$case_dir/home/.kube/config" || fail 'foreign kubeconfig was deleted'; assert_no_mutator "$case_dir/log"
 
+  case_dir="$suite/secondary-kubeconfig"; make_fakes "$case_dir"; printf 'foreign\n' >"$case_dir/home/.config/kubeconfig-observability-platform.yaml"; run_case "$case_dir" 0; test -f "$case_dir/home/.config/kubeconfig-observability-platform.yaml" || fail 'unowned secondary kubeconfig was deleted'; assert_no_mutator "$case_dir/log"
+
   case_dir="$suite/missing-tool"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; MOCK_HELM_BIN="$case_dir/bin/missing-helm" run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
 
   case_dir="$suite/wrong-registry"; make_fakes "$case_dir"; touch "$case_dir/world/registry-present"; printf 'r1|k3d-observability-registry|database\n' >"$case_dir/world/registry-container"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
@@ -258,7 +260,7 @@ main() {
   case_dir="$suite/lookalikes"; make_fakes "$case_dir"; touch "$case_dir/world/lookalike-cluster" "$case_dir/world/lookalike-registry"; run_case "$case_dir" 0; assert_no_mutator "$case_dir/log"
 
   if ((failures > 0)); then printf 'cleanup matrix failures: %d\n' "$failures" >&2; return 1; fi
-  printf 'cleanup fake matrix passed: 14 scenarios plus idempotent repeat\n'
+  printf 'cleanup fake matrix passed: 15 scenarios plus idempotent repeat\n'
 }
 
 main "$@"

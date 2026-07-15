@@ -12,7 +12,6 @@ TERRAFORM_BIN=${TERRAFORM_BIN:-terraform}
 MAKE_BIN=${MAKE_BIN:-make}
 HELM_BIN=${HELM_BIN:-helm}
 NETWORK_NAME="k3d-${CLUSTER_NAME}"
-SECONDARY_KUBECONFIG="$HOME/.config/kubeconfig-${CLUSTER_NAME}.yaml"
 PROJECT_KUBECONFIG="$HOME/.kube/config-observability"
 DOCKER_ENDPOINT_FORMAT="{{ range \$id, \$_ := .Containers }}{{ \$id }}{{ \"\\n\" }}{{ end }}"
 
@@ -159,7 +158,7 @@ if $state_exists; then
   [[ -z $("$TERRAFORM_BIN" -chdir="$TF_DIR" state list) ]] || { echo "Terraform state remains after reconciliation" >&2; exit 1; }
 fi
 
-rm -f -- "$KUBECONFIG" "$SECONDARY_KUBECONFIG"
+rm -f -- "$KUBECONFIG"
 
 "$K3D_BIN" cluster list 2>/dev/null | awk -v expected="$CLUSTER_NAME" '$1 == expected {exit 1}'
 "$K3D_BIN" registry list 2>/dev/null | awk -v expected="$REGISTRY_NAME" '$1 == expected {exit 1}'
