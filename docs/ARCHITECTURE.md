@@ -20,7 +20,8 @@ graph TB
     end
 
     subgraph Observability["Observability (observability namespace)"]
-        otel[OTel Collector<br/>:4317 gRPC / :4318 HTTP]
+        otel[OTel Collector gateway<br/>:4317 gRPC / :4318 HTTP]
+        agents[OTel node log agents]
         tempo[Tempo]
         loki[Loki]
         prom[Prometheus]
@@ -49,7 +50,11 @@ graph TB
     cart -->|OTLP| otel
     checkout -->|OTLP| otel
     order -->|OTLP| otel
-    payment -->|OTLP| otel
+    payment -->|OTLP traces| otel
+    payment -->|Prometheus scrape| prom
+
+    Services -->|container stdout/stderr| agents
+    agents -->|OTLP logs| otel
 
     otel -->|traces| tempo
     otel -->|logs| loki
@@ -94,15 +99,19 @@ OpenTelemetry context propagation works across both HTTP and gRPC, so a single t
 
 ## Telemetry Flow
 
-1. Each service initializes an OpenTelemetry SDK with OTLP exporters pointing at `otel-collector.observability.svc:4317`.
-2. Auto-instrumentation captures HTTP server requests, HTTP client calls, and gRPC calls.
-3. The OTel Collector receives OTLP on ports `4317` (gRPC) and `4318` (HTTP).
-4. Processors add Kubernetes metadata and project-wide resource attributes, then batch the data.
+1. Python services export traces and the canonical HTTP request-duration histogram through OTLP to `otel-collector.observability.svc:4317`.
+2. Payment exports traces through OTLP and exposes the same histogram schema to Prometheus through the bounded direct-scrape exception.
+3. One node log agent per schedulable node tails Kubernetes container logs and forwards them to the single local-demo Collector gateway.
+4. Gateway processors add Kubernetes metadata and project resource attributes. The servicegraph connector receives both sides of each trace at that one state owner.
 5. Exporters fan out signals:
    - Traces -> Tempo (`otlp/tempo`)
-   - Logs -> Loki (`otlphttp/loki`)
+   - Container logs -> Loki (`otlphttp/loki`)
    - Metrics -> Prometheus remote-write (`prometheusremotewrite`)
-6. Grafana queries Tempo, Loki, and Prometheus through provisioned datasources.
+6. Grafana queries Tempo, Loki, Prometheus, and Alertmanager through four provisioned datasources and ten provisioned dashboards.
+
+The stable RED series is `http_server_request_duration_seconds_{bucket,count,sum}`.
+Prometheus resource labels are `service_name` and `service_namespace`; HTTP
+labels are `http_response_status_code` and the route template `http_route`.
 
 ## Alerting Flow
 
@@ -116,7 +125,7 @@ OpenTelemetry context propagation works across both HTTP and gRPC, so a single t
 
 SLOs live in `slo/*.yaml`. Each file defines SLIs, objectives, rolling windows, and error budgets. The build helper `scripts/build_prometheus_rules.py` turns those definitions into:
 
-- Recording rules that compute ratio SLIs over multiple windows (1h, 6h, 3d, 30d).
+- Recording rules that compute ratios over `5m`, `30m`, `1h`, `6h`, `1d`, `3d`, and `30d`, plus service-qualified 30-day error-budget percentages.
 - Multi-window multi-burn-rate (MWMB) alerts.
 
 ### Burn-rate tiers
@@ -125,7 +134,7 @@ SLOs live in `slo/*.yaml`. Each file defines SLIs, objectives, rolling windows, 
 |------|---------|----------|--------|
 | Fast burn | 1h and 6h | page | Error budget will be exhausted soon unless the failure stops. |
 | Slow burn | 6h and 3d | warning | Budget is draining steadily; open a ticket. |
-| Service down | 1m | page | Prometheus cannot scrape the service. |
+| Service down | 1m | page | The synthetic health check reports failure. |
 | High error rate | 5m | page | More than 5% 5xx responses. |
 | High latency | 5m | warning | p99 latency exceeded 2x the SLO threshold. |
 
@@ -148,11 +157,12 @@ SLOs live in `slo/*.yaml`. Each file defines SLIs, objectives, rolling windows, 
 k6 scripts in `load/k6/` cover four profiles:
 
 - **smoke**: 1 VU for 30s, validates every `/healthz` endpoint.
-- **load**: 10 VUs for 5 minutes, steady checkout flow.
-- **stress**: ramp to 50 VUs, find breaking point.
-- **spike**: sudden jump to 100 VUs, test recovery.
+- **load**: ramp from 50 to 100 VUs, then drain; exercises the checkout flow.
+- **stress**: ramp to 100 and then 200 VUs over ten minutes.
+- **spike**: jump from 10 to 500 VUs, hold for 30 seconds, then recover.
 
-Each profile runs as a Kubernetes Job in the `ecom` namespace so it can reach services via ClusterIP DNS.
+Each profile runs as a Kubernetes Job in the `load` namespace and reaches the
+`ecom` services through namespace-qualified ClusterIP DNS.
 
 ### Chaos Testing
 

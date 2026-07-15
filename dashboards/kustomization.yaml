@@ -8,7 +8,7 @@
 # loads the dashboards at startup.
 #
 # Apply with:
-#   kustomize build observability/dashboards | kubectl apply -f -
+#   kubectl apply -k dashboards
 # ----------------------------------------------------------------------------
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

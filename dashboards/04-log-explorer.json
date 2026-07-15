@@ -79,7 +79,7 @@
             "type": "loki",
             "uid": "loki-observability"
           },
-          "expr": "{namespace=\"ecom\", service=~\"$service\"} |= \"$query\"",
+          "expr": "{service_namespace=\"ecom\", service_name=~\"$service\"} |= \"$query\"",
           "queryType": "range"
         }
       ],
@@ -115,8 +115,8 @@
           "type": "prometheus",
           "uid": "prometheus-observability"
         },
-        "definition": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
-        "query": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
+        "definition": "label_values(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}, service_name)",
+        "query": "label_values(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}, service_name)",
         "regex": "",
         "current": {
           "selected": false,

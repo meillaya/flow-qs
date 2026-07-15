@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "SLO Status \u2014 per-service error budget gauges (30d window), burn-rate panels (5m/1h/6h/24h), and recent active alerts. SLO recording rules are defined in Task 15/16; metric names follow the convention slo:availability:{error_budget_remaining_ratio, burn_rate_5m, burn_rate_1h, burn_rate_6h, burn_rate_24h}.",
+  "description": "SLO Status \u2014 service-qualified 30d error budgets, ratio-derived burn rates, and active Prometheus alerts.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -72,15 +72,14 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:error_budget_remaining_ratio{service=\"catalog-service\"} or vector(0)",
+          "expr": "{__name__=\"slo:catalog-service:availability:error_budget_remaining:30d\"}",
           "legendFormat": "remaining"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
+          "unit": "percent",
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -90,11 +89,11 @@
               },
               {
                 "color": "yellow",
-                "value": 0.25
+                "value": 25
               },
               {
                 "color": "green",
-                "value": 0.5
+                "value": 50
               }
             ]
           }
@@ -127,15 +126,14 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:error_budget_remaining_ratio{service=\"inventory-service\"} or vector(0)",
+          "expr": "{__name__=\"slo:inventory-service:availability:error_budget_remaining:30d\"}",
           "legendFormat": "remaining"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
+          "unit": "percent",
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -145,11 +143,11 @@
               },
               {
                 "color": "yellow",
-                "value": 0.25
+                "value": 25
               },
               {
                 "color": "green",
-                "value": 0.5
+                "value": 50
               }
             ]
           }
@@ -182,15 +180,14 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:error_budget_remaining_ratio{service=\"cart-service\"} or vector(0)",
+          "expr": "{__name__=\"slo:cart-service:availability:error_budget_remaining:30d\"}",
           "legendFormat": "remaining"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
+          "unit": "percent",
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -200,11 +197,11 @@
               },
               {
                 "color": "yellow",
-                "value": 0.25
+                "value": 25
               },
               {
                 "color": "green",
-                "value": 0.5
+                "value": 50
               }
             ]
           }
@@ -237,15 +234,14 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:error_budget_remaining_ratio{service=\"checkout-service\"} or vector(0)",
+          "expr": "{__name__=\"slo:checkout-service:availability:error_budget_remaining:30d\"}",
           "legendFormat": "remaining"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
+          "unit": "percent",
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -255,11 +251,11 @@
               },
               {
                 "color": "yellow",
-                "value": 0.25
+                "value": 25
               },
               {
                 "color": "green",
-                "value": 0.5
+                "value": 50
               }
             ]
           }
@@ -292,15 +288,14 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:error_budget_remaining_ratio{service=\"order-service\"} or vector(0)",
+          "expr": "{__name__=\"slo:order-service:availability:error_budget_remaining:30d\"}",
           "legendFormat": "remaining"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
+          "unit": "percent",
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -310,11 +305,11 @@
               },
               {
                 "color": "yellow",
-                "value": 0.25
+                "value": 25
               },
               {
                 "color": "green",
-                "value": 0.5
+                "value": 50
               }
             ]
           }
@@ -328,7 +323,7 @@
     },
     {
       "type": "gauge",
-      "title": "Error budget remaining (30d) \u2014 payment-service",
+      "title": "Error budget remaining (30d) \u2014 payment-gateway",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
@@ -347,15 +342,14 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:error_budget_remaining_ratio{service=\"payment-service\"} or vector(0)",
+          "expr": "{__name__=\"slo:payment-gateway:availability:error_budget_remaining:30d\"}",
           "legendFormat": "remaining"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
+          "unit": "percent",
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -365,11 +359,65 @@
               },
               {
                 "color": "yellow",
-                "value": 0.25
+                "value": 25
               },
               {
                 "color": "green",
-                "value": 0.5
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "Error budget remaining (30d) \u2014 end-to-end-checkout",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-observability"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 0,
+        "y": 8
+      },
+      "id": 12,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "{__name__=\"slo:end-to-end-checkout:availability:error_budget_remaining:30d\"}",
+          "legendFormat": "remaining"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 25
+              },
+              {
+                "color": "green",
+                "value": 50
               }
             ]
           }
@@ -388,7 +436,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "id": 101,
       "collapsed": false,
@@ -405,7 +453,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "id": 7,
       "targets": [
@@ -415,8 +463,62 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:burn_rate_5m{service=~\".+\"} or vector(0)",
-          "legendFormat": "{{service}}"
+          "expr": "(1 - {__name__=\"sli:catalog-service:availability:ratio_5m\"}) / (1 - 0.9995)",
+          "legendFormat": "catalog-service"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:inventory-service:availability:ratio_5m\"}) / (1 - 0.9995)",
+          "legendFormat": "inventory-service"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:cart-service:availability:ratio_5m\"}) / (1 - 0.999)",
+          "legendFormat": "cart-service"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:checkout-service:availability:ratio_5m\"}) / (1 - 0.999)",
+          "legendFormat": "checkout-service"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:order-service:availability:ratio_5m\"}) / (1 - 0.999)",
+          "legendFormat": "order-service"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:payment-gateway:availability:ratio_5m\"}) / (1 - 0.995)",
+          "legendFormat": "payment-gateway"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:end-to-end-checkout:availability:ratio_5m\"}) / (1 - 0.99)",
+          "legendFormat": "end-to-end-checkout"
         }
       ],
       "fieldConfig": {
@@ -467,7 +569,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 16
       },
       "id": 8,
       "targets": [
@@ -477,8 +579,62 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:burn_rate_1h{service=~\".+\"} or vector(0)",
-          "legendFormat": "{{service}}"
+          "expr": "(1 - {__name__=\"sli:catalog-service:availability:ratio_1h\"}) / (1 - 0.9995)",
+          "legendFormat": "catalog-service"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:inventory-service:availability:ratio_1h\"}) / (1 - 0.9995)",
+          "legendFormat": "inventory-service"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:cart-service:availability:ratio_1h\"}) / (1 - 0.999)",
+          "legendFormat": "cart-service"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:checkout-service:availability:ratio_1h\"}) / (1 - 0.999)",
+          "legendFormat": "checkout-service"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:order-service:availability:ratio_1h\"}) / (1 - 0.999)",
+          "legendFormat": "order-service"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:payment-gateway:availability:ratio_1h\"}) / (1 - 0.995)",
+          "legendFormat": "payment-gateway"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:end-to-end-checkout:availability:ratio_1h\"}) / (1 - 0.99)",
+          "legendFormat": "end-to-end-checkout"
         }
       ],
       "fieldConfig": {
@@ -529,7 +685,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 24
       },
       "id": 9,
       "targets": [
@@ -539,8 +695,62 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:burn_rate_6h{service=~\".+\"} or vector(0)",
-          "legendFormat": "{{service}}"
+          "expr": "(1 - {__name__=\"sli:catalog-service:availability:ratio_6h\"}) / (1 - 0.9995)",
+          "legendFormat": "catalog-service"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:inventory-service:availability:ratio_6h\"}) / (1 - 0.9995)",
+          "legendFormat": "inventory-service"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:cart-service:availability:ratio_6h\"}) / (1 - 0.999)",
+          "legendFormat": "cart-service"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:checkout-service:availability:ratio_6h\"}) / (1 - 0.999)",
+          "legendFormat": "checkout-service"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:order-service:availability:ratio_6h\"}) / (1 - 0.999)",
+          "legendFormat": "order-service"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:payment-gateway:availability:ratio_6h\"}) / (1 - 0.995)",
+          "legendFormat": "payment-gateway"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:end-to-end-checkout:availability:ratio_6h\"}) / (1 - 0.99)",
+          "legendFormat": "end-to-end-checkout"
         }
       ],
       "fieldConfig": {
@@ -582,7 +792,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Burn rate (24h) \u2014 per service",
+      "title": "Burn rate (1d) \u2014 per service",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-observability"
@@ -591,7 +801,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 24
       },
       "id": 10,
       "targets": [
@@ -601,8 +811,62 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "slo:availability:burn_rate_24h{service=~\".+\"} or vector(0)",
-          "legendFormat": "{{service}}"
+          "expr": "(1 - {__name__=\"sli:catalog-service:availability:ratio_1d\"}) / (1 - 0.9995)",
+          "legendFormat": "catalog-service"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:inventory-service:availability:ratio_1d\"}) / (1 - 0.9995)",
+          "legendFormat": "inventory-service"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:cart-service:availability:ratio_1d\"}) / (1 - 0.999)",
+          "legendFormat": "cart-service"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:checkout-service:availability:ratio_1d\"}) / (1 - 0.999)",
+          "legendFormat": "checkout-service"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:order-service:availability:ratio_1d\"}) / (1 - 0.999)",
+          "legendFormat": "order-service"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:payment-gateway:availability:ratio_1d\"}) / (1 - 0.995)",
+          "legendFormat": "payment-gateway"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-observability"
+          },
+          "expr": "(1 - {__name__=\"sli:end-to-end-checkout:availability:ratio_1d\"}) / (1 - 0.99)",
+          "legendFormat": "end-to-end-checkout"
         }
       ],
       "fieldConfig": {
@@ -649,7 +913,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 32
       },
       "id": 102,
       "collapsed": false,
@@ -659,24 +923,24 @@
       "type": "table",
       "title": "Recent alerts (last 6h)",
       "datasource": {
-        "type": "alertmanager",
-        "uid": "alertmanager-observability"
+        "type": "prometheus",
+        "uid": "prometheus-observability"
       },
       "gridPos": {
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 32
       },
       "id": 11,
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "alertmanager",
-            "uid": "alertmanager-observability"
+            "type": "prometheus",
+            "uid": "prometheus-observability"
           },
-          "expr": "ALERTS{alertstate=\"firing\",severity=~\"page|ticket\"}",
+          "expr": "ALERTS{alertstate=\"firing\",severity=~\"page|warning\"}",
           "legendFormat": "{{alertname}}",
           "instant": true,
           "format": "table"

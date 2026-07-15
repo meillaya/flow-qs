@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -54,6 +55,18 @@ THRESHOLD_RE = re.compile(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class ParsedAlert:
+    alert: str
+    severity: str
+    service: str
+    slo_kind: str
+    windows: dict[str, float]
+    selector_services: frozenset[str]
+    burn_window_short: str
+    burn_window_long: str
+
+
 def load_slo_objectives(slo_dir: Path) -> dict[tuple[str, str], float]:
     """Map (service, slo_kind) → objective ratio."""
     objectives: dict[tuple[str, str], float] = {}
@@ -72,24 +85,37 @@ def expected_threshold(objective: float, burn_factor: float) -> float:
     return 1.0 - burn_factor * (1.0 - objective)
 
 
-def parse_alerts(path: Path) -> list[tuple[str, str, str, dict[str, float]]]:
-    """Return ``(alert_name, severity, service, {window: threshold})`` tuples."""
+def parse_alerts(path: Path) -> list[ParsedAlert]:
     with path.open() as fh:
         doc = yaml.safe_load(fh)
 
-    parsed: list[tuple[str, str, str, dict[str, float]]] = []
+    parsed: list[ParsedAlert] = []
     for group in doc["groups"]:
         for rule in group["rules"]:
             if "alert" not in rule:
                 continue
             alert = rule["alert"]
-            severity = rule.get("labels", {}).get("severity", "")
-            service = rule.get("labels", {}).get("service", "")
-            windows = {}
+            labels = rule.get("labels", {})
+            severity = labels.get("severity", "")
+            service = labels.get("service", "")
+            windows: dict[str, float] = {}
+            selector_services: set[str] = set()
             for match in THRESHOLD_RE.finditer(rule["expr"]):
-                _svc, slo_kind, window, value = match.groups()
+                selector_service, _slo_kind, window, value = match.groups()
+                selector_services.add(selector_service)
                 windows[window] = float(value)
-            parsed.append((alert, severity, service, windows))
+            parsed.append(
+                ParsedAlert(
+                    alert=alert,
+                    severity=severity,
+                    service=service,
+                    slo_kind=labels.get("slo_kind", ""),
+                    windows=windows,
+                    selector_services=frozenset(selector_services),
+                    burn_window_short=labels.get("burn_window_short", ""),
+                    burn_window_long=labels.get("burn_window_long", ""),
+                )
+            )
     return parsed
 
 
@@ -110,40 +136,90 @@ def main() -> int:
 
     failures: list[str] = []
 
-    for alert, severity, service, windows in parsed:
-        if severity == "page" and "BurnTooFast" in alert:
+    observed_contracts: set[tuple[str, str, str]] = set()
+    mwmb_count = 0
+    for rule in parsed:
+        if "BurnTooFast" not in rule.alert:
+            continue
+        mwmb_count += 1
+        if rule.severity == "page":
             factors = PAGE_FACTORS
             expected_windows = {"1h", "6h"}
-        elif severity == "warning" and "BurnTooFast" in alert:
+            expected_short = "1h"
+            expected_long = "6h"
+        elif rule.severity == "warning":
             factors = TICKET_FACTORS
             expected_windows = {"6h", "3d"}
+            expected_short = "6h"
+            expected_long = "3d"
         else:
-            continue  # not an MWMB alert
-
-        slo_kind = "latency_p99" if "Latency" in alert else "availability"
-        objective = objectives.get((service, slo_kind))
-        if objective is None:
-            failures.append(f"{service}/{slo_kind}: no SLO objective found")
-            continue
-
-        if set(windows) != expected_windows:
             failures.append(
-                f"{alert} ({service}/{slo_kind}): windows {set(windows)} != {expected_windows}"
+                f"{rule.alert} ({rule.service}): invalid severity {rule.severity!r}"
             )
             continue
 
-        for window, actual in windows.items():
+        expected_kind = "latency_p99" if "Latency" in rule.alert else "availability"
+        if rule.slo_kind != expected_kind:
+            failures.append(
+                f"{rule.alert} ({rule.service}): slo_kind {rule.slo_kind!r} "
+                f"!= {expected_kind!r}"
+            )
+        if rule.selector_services != {rule.service}:
+            failures.append(
+                f"{rule.alert} ({rule.service}/{expected_kind}): selector services "
+                f"{set(rule.selector_services)} != {{{rule.service!r}}}"
+            )
+        if (
+            rule.burn_window_short != expected_short
+            or rule.burn_window_long != expected_long
+        ):
+            failures.append(
+                f"{rule.alert} ({rule.service}/{expected_kind}): burn-window labels "
+                f"{rule.burn_window_short}/{rule.burn_window_long} != "
+                f"{expected_short}/{expected_long}"
+            )
+        contract = (rule.service, expected_kind, rule.severity)
+        if contract in observed_contracts:
+            failures.append(f"duplicate MWMB contract {contract}")
+        observed_contracts.add(contract)
+
+        objective = objectives.get((rule.service, expected_kind))
+        if objective is None:
+            failures.append(f"{rule.service}/{expected_kind}: no SLO objective found")
+            continue
+
+        if set(rule.windows) != expected_windows:
+            failures.append(
+                f"{rule.alert} ({rule.service}/{expected_kind}): windows "
+                f"{set(rule.windows)} != {expected_windows}"
+            )
+            continue
+
+        for window, actual in rule.windows.items():
             expected = expected_threshold(objective, factors[window])
             diff = abs(actual - expected)
             ok = diff <= ABS_TOL
-            print(f"{alert:<35} {service:<25} {slo_kind:<12} "
+            print(f"{rule.alert:<35} {rule.service:<25} {expected_kind:<12} "
                   f"{window:<6} {actual:>12.6f} {expected:>12.6f} {diff:>12.2e} "
                   f"{'OK' if ok else 'FAIL'}")
             if not ok:
                 failures.append(
-                    f"{alert}/{service}/{slo_kind}/{window}: "
+                    f"{rule.alert}/{rule.service}/{expected_kind}/{window}: "
                     f"actual={actual} expected={expected}"
                 )
+
+    expected_contracts = {
+        (service, kind, severity)
+        for service, kind in objectives
+        for severity in ("page", "warning")
+    }
+    if mwmb_count != len(expected_contracts):
+        failures.append(
+            f"expected {len(expected_contracts)} MWMB alerts, found {mwmb_count}"
+        )
+    missing_contracts = expected_contracts - observed_contracts
+    if missing_contracts:
+        failures.append(f"missing MWMB contracts: {sorted(missing_contracts)}")
 
     print("-" * 110)
     if failures:

@@ -2,8 +2,8 @@ service: cart-service
 slos:
   - name: availability
     sli:
-      spec: http_server_requests_total{status!~"5.."}
-      total_spec: http_server_requests_total
+      spec: http_server_request_duration_seconds_count{http_response_status_code!~"5.."}
+      total_spec: http_server_request_duration_seconds_count
     objective: 0.999
     window: 30d
     error_budget: 43m12s

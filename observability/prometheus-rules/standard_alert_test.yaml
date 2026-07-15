@@ -1,0 +1,49 @@
+rule_files:
+  - alert_rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_seconds_count{service_name="catalog-service",http_response_status_code="200",http_route="/products"}'
+        values: '0+90x12'
+      - series: 'http_server_request_duration_seconds_count{service_name="catalog-service",http_response_status_code="503",http_route="/products"}'
+        values: '0+10x12'
+      - series: 'http_server_request_duration_seconds_bucket{service_name="catalog-service",http_route="/products",le="0.1"}'
+        values: '0+0x12'
+      - series: 'http_server_request_duration_seconds_bucket{service_name="catalog-service",http_route="/products",le="0.2"}'
+        values: '0+0x12'
+      - series: 'http_server_request_duration_seconds_bucket{service_name="catalog-service",http_route="/products",le="0.5"}'
+        values: '0+100x12'
+      - series: 'http_server_request_duration_seconds_bucket{service_name="catalog-service",http_route="/products",le="1"}'
+        values: '0+100x12'
+      - series: 'http_server_request_duration_seconds_bucket{service_name="catalog-service",http_route="/products",le="+Inf"}'
+        values: '0+100x12'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HighErrorRate
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: catalog-service
+            exp_annotations:
+              summary: catalog-service 5xx ratio > 5%
+              description: catalog-service emitted >5% 5xx responses for 5 minutes.
+      - eval_time: 4m
+        alertname: HighLatencyP99
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HighLatencyP99
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: catalog-service
+              threshold_p99_s: "0.4000"
+              critical_p99_s: "0.8000"
+            exp_annotations:
+              summary: catalog-service p99 latency > 400ms
+              description: catalog-service p99 latency exceeded 2x the SLO threshold (200ms) for 5 minutes.

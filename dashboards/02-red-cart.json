@@ -85,7 +85,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m]))",
           "legendFormat": "rate"
         }
       ],
@@ -148,7 +148,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\"}[5m])), 1e-9)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m])), 1e-9)",
           "legendFormat": "error_ratio"
         }
       ],
@@ -211,7 +211,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"cart-service\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m])))",
           "legendFormat": "p99"
         }
       ],
@@ -287,7 +287,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m]))",
           "legendFormat": "rate"
         }
       ],
@@ -347,7 +347,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\",status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\",http_response_status_code=~\"5..\"}[5m]))",
           "legendFormat": "errors"
         }
       ],
@@ -407,7 +407,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"cart-service\"}[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m])))",
           "legendFormat": "p50"
         },
         {
@@ -416,7 +416,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"cart-service\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m])))",
           "legendFormat": "p95"
         },
         {
@@ -425,7 +425,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"cart-service\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m])))",
           "legendFormat": "p99"
         }
       ],
@@ -498,7 +498,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m]))",
           "legendFormat": "rate"
         }
       ],
@@ -553,7 +553,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"cart-service\",status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"cart-service\",http_response_status_code=~\"5..\"}[5m]))",
           "legendFormat": "errors"
         }
       ],
@@ -616,7 +616,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"cart-service\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"cart-service\"}[5m])))",
           "legendFormat": "p99"
         }
       ],
@@ -677,8 +677,8 @@
           "type": "prometheus",
           "uid": "prometheus-observability"
         },
-        "definition": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
-        "query": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
+        "definition": "label_values(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}, service_name)",
+        "query": "label_values(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}, service_name)",
         "regex": "",
         "current": {
           "selected": true,

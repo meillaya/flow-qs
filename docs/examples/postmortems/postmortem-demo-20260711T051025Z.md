@@ -8,7 +8,7 @@ On 2026-07-11T05:13:05.125000+00:00, the alert `ServiceDown` fired against the `
 - **Severity**: `page`
 - **Related SLO**: `n/a`
 - **User impact**: requests to `catalog-service` were degraded while the alert was firing.
-- **Error budget**: consumption depends on the alert duration; check the recording rule `slo:availability:burn_rate_{5m,1h,6h,24h}` for live burn-rate data.
+- **Error budget**: consumption depends on the alert duration; derive live burn from the service-qualified `sli:<service>:availability:ratio_{5m,1h,6h,1d}` records and inspect `slo:<service>:availability:error_budget_remaining:30d`.
 
 ## Timeline
 | Timestamp (UTC) | Source | Event |

@@ -29,6 +29,7 @@ SERVICES=(
     "payment-gateway         8005"
     "checkout-service-checkout-service 8003"
 )
+PRODUCT_LOG_SERVICES='cart-service|catalog-service|checkout-service|inventory-service|order-service|payment-gateway|synthetic-monitor|incident-engine'
 
 PASS=0
 FAIL=0
@@ -162,13 +163,21 @@ check_2_namespaces() {
 
 check_3_pods_ready() {
     hdr "Check 3: pods Ready"
-    local out collector_out
+    local out collector_out agent_out deployments_out
     if ! out="$(kubectl get pods -A --no-headers 2>&1)"; then
         record FAIL "3.pods-ready" "kubectl error: ${out}"
         return
     fi
     if ! collector_out="$(kubectl -n "${OBS_NS}" get deployment otel-collector -o json 2>&1)"; then
         record FAIL "3.pods-ready" "collector deployment query error: ${collector_out}"
+        return
+    fi
+    if ! agent_out="$(kubectl -n "${OBS_NS}" get daemonset otel-collector-agent -o json 2>&1)"; then
+        record FAIL "3.pods-ready" "collector log-agent query error: ${agent_out}"
+        return
+    fi
+    if ! deployments_out="$(kubectl get deployments -A -o json 2>&1)"; then
+        record FAIL "3.pods-ready" "workload image query error: ${deployments_out}"
         return
     fi
     local total ready malformed
@@ -205,15 +214,48 @@ check_3_pods_ready() {
             end
         ' 2>/dev/null || printf 'invalid\tinvalid\n'
     )
-    log "  observability pods=${ready}/${total} Ready+Running malformed=${malformed}  otel-collector=${collector_ready}/${collector_desired} Ready"
+    local agent_desired="invalid" agent_ready="invalid"
+    read -r agent_desired agent_ready < <(
+        printf '%s' "${agent_out}" | jq -er '
+            if (.status.desiredNumberScheduled | type) == "number"
+                and (.status.numberReady | type) == "number"
+                and .status.desiredNumberScheduled == (.status.desiredNumberScheduled | floor)
+                and .status.numberReady == (.status.numberReady | floor)
+            then [.status.desiredNumberScheduled, .status.numberReady] | @tsv
+            else error("agent readiness counts must be integers")
+            end
+        ' 2>/dev/null || printf 'invalid\tinvalid\n'
+    )
+    local workload_count="invalid" invalid_image_count="invalid"
+    read -r workload_count invalid_image_count < <(
+        printf '%s' "${deployments_out}" | jq -er '
+            ["cart-service", "catalog-service", "checkout-service", "inventory-service",
+             "order-service", "payment-gateway", "synthetic-monitor", "incident-engine"] as $expected
+            | [.items[]
+               | select(.metadata.name as $name | $expected | index($name))
+               | {name: .metadata.name, image: .spec.template.spec.containers[0].image}] as $workloads
+            | [
+                ($workloads | length),
+                ([$workloads[]
+                  | select((.image | type) != "string"
+                    or (.image | test("(@sha256:[0-9a-f]{64}|:[0-9a-f]{12,64})$")) | not)]
+                 | length)
+              ] | @tsv
+        ' 2>/dev/null || printf 'invalid\tinvalid\n'
+    )
+    log "  observability pods=${ready}/${total} Ready+Running malformed=${malformed}  otel-collector=${collector_ready}/${collector_desired} Ready  log-agents=${agent_ready}/${agent_desired} Ready  immutable-workloads=${workload_count}/8 invalid-images=${invalid_image_count}"
     if [[ "${total}" -eq 0 ]]; then
         record FAIL "3.pods-ready" "no observability pods visible"
     elif [[ "${malformed}" -gt 0 ]]; then
         record FAIL "3.pods-ready" "malformed observability pod rows=${malformed}"
     elif [[ "${ready}" -ne "${total}" ]]; then
         record FAIL "3.pods-ready" "observability pods expected all Ready+Running, got ${ready}/${total}"
-    elif [[ "${collector_desired}" != "2" || "${collector_ready}" != "2" ]]; then
-        record FAIL "3.pods-ready" "otel-collector expected ready/desired=2/2, got ${collector_ready}/${collector_desired}"
+    elif [[ ! "${collector_desired}" =~ ^[1-9][0-9]*$ || "${collector_ready}" != "${collector_desired}" ]]; then
+        record FAIL "3.pods-ready" "otel-collector expected ready=desired>0, got ${collector_ready}/${collector_desired}"
+    elif [[ ! "${agent_desired}" =~ ^[1-9][0-9]*$ || "${agent_ready}" != "${agent_desired}" ]]; then
+        record FAIL "3.pods-ready" "otel-collector-agent expected ready=desired>0, got ${agent_ready}/${agent_desired}"
+    elif [[ "${workload_count}" != "8" || "${invalid_image_count}" != "0" ]]; then
+        record FAIL "3.pods-ready" "expected 8 immutable workload images, got count=${workload_count} invalid=${invalid_image_count}"
     else
         record PASS "3.pods-ready"
     fi
@@ -316,7 +358,7 @@ check_5_otel_trace() {
 EOF
 )
     local push_code
-    push_code=$(curl -sS -m 5 -o /tmp/verify_otel.out -w '%{http_code}' \
+    push_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' \
         -H 'Content-Type: application/json' \
         -d "${payload}" \
         "http://127.0.0.1:${otel_pf}/v1/traces" 2>/dev/null) || push_code=000
@@ -367,7 +409,7 @@ check_6_loki_logs() {
 EOF
 )
     local pcode
-    pcode=$(curl -sS -m 5 -o /tmp/verify_loki_push.out -w '%{http_code}' \
+    pcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' \
         -H 'Content-Type: application/json' \
         -d "${push_payload}" \
         "http://127.0.0.1:${loki_pf}/loki/api/v1/push" 2>/dev/null) || pcode=000
@@ -389,23 +431,46 @@ EOF
             || printf 'invalid\t0\n'
     )
 
+    local product_query product_body product_code product_status product_count
+    product_query="{service_namespace=~\"ecom|incident\",service_name=~\"${PRODUCT_LOG_SERVICES}\"}"
+    product_body=$(curl -sS -m 5 -G \
+        --data-urlencode "query=${product_query}" \
+        "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_body=''
+    product_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
+        --data-urlencode "query=${product_query}" \
+        "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_code=000
+    read -r product_status product_count < <(
+        printf '%s' "${product_body}" | jq -er '
+            [
+                .status,
+                (if (.data.result | type) == "array"
+                 then ([.data.result[].stream.service_name] | unique | length)
+                 else error("result is not an array") end)
+            ] | @tsv
+        ' 2>/dev/null || printf 'invalid\t0\n'
+    )
+
     stop_port_forwards "${pid}"
 
     log "  loki /ready=${ready_code}"
     log "  push http=${pcode}  query_range http=${qcode} status=${api_status} results=${result_count}"
+    log "  product logs http=${product_code} status=${product_status} service identities=${product_count}/8"
     if [[ "${pcode}" =~ ^2[0-9][0-9]$ \
         && "${qcode}" =~ ^2[0-9][0-9]$ \
         && "${api_status}" == "success" \
         && "${result_count}" =~ ^[0-9]+$ \
-        && "${result_count}" -gt 0 ]]; then
+        && "${result_count}" -gt 0 \
+        && "${product_code}" =~ ^2[0-9][0-9]$ \
+        && "${product_status}" == "success" \
+        && "${product_count}" == "8" ]]; then
         record PASS "6.loki-logs"
     else
-        record FAIL "6.loki-logs" "push=${pcode} query=${qcode} status=${api_status} results=${result_count}"
+        record FAIL "6.loki-logs" "push=${pcode} canary=${qcode}/${api_status}/${result_count} product=${product_code}/${product_status}/${product_count}"
     fi
 }
 
 check_7_prom_metric() {
-    hdr 'Check 7: Prometheus query "up"'
+    hdr "Check 7: Prometheus product metrics"
     if ! kubectl -n "${OBS_NS}" get svc prometheus >/dev/null 2>&1; then
         # Fallback to kube-prometheus-stack's `prometheus-operated`
         if ! kubectl -n "${OBS_NS}" get svc prometheus-operated >/dev/null 2>&1; then
@@ -428,32 +493,47 @@ check_7_prom_metric() {
     track_port_forward "${pid}"
     sleep 1
 
-    local ready_code qcode qbody
+    local ready_code
     ready_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${prom_pf}/-/ready" 2>/dev/null) || ready_code=000
-    qbody=$(curl -sS -m 5 -G --data-urlencode 'query=up' \
-        "http://127.0.0.1:${prom_pf}/api/v1/query" 2>/dev/null)
-    qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G --data-urlencode 'query=up' \
-        "http://127.0.0.1:${prom_pf}/api/v1/query" 2>/dev/null) || qcode=000
+
+    local -a queries=(
+        'count(count by (service_name) (http_server_request_duration_seconds_count{service_namespace="ecom",service_name=~"cart-service|catalog-service|checkout-service|inventory-service|order-service|payment-gateway"}))'
+        'count({__name__=~"sli:.*:availability:ratio_5m"})'
+        'up{job="payment-gateway"}'
+        'sum(traces_service_graph_request_total)'
+    )
+    local -a expected=("6" "7" "1" "1")
+    local -a names=("canonical-services" "slo-records" "payment-target" "servicegraph-edge")
+    local check_failed=0 index query qbody api_status result_value
+    for index in "${!queries[@]}"; do
+        query="${queries[$index]}"
+        qbody=$(curl -sS -m 5 -G --data-urlencode "query=${query}" \
+            "http://127.0.0.1:${prom_pf}/api/v1/query" 2>/dev/null) || qbody=''
+        read -r api_status result_value < <(
+            printf '%s' "${qbody}" | jq -er '
+                if .status == "success"
+                    and (.data.result | type) == "array"
+                    and (.data.result | length) == 1
+                    and (.data.result[0].value | type) == "array"
+                then [.status, .data.result[0].value[1]] | @tsv
+                else error("invalid vector result")
+                end
+            ' 2>/dev/null || printf 'invalid\tinvalid\n'
+        )
+        log "  ${names[$index]} status=${api_status} value=${result_value} expected=${expected[$index]}"
+        if [[ "${api_status}" != "success" || "${result_value}" != "${expected[$index]}" ]]; then
+            check_failed=1
+        fi
+    done
 
     stop_port_forwards "${pid}"
 
-    local api_status result_count
-    read -r api_status result_count < <(
-        printf '%s' "${qbody}" \
-            | jq -er '[.status, (if (.data.result | type) == "array" then (.data.result | length) else error("result is not an array") end)] | @tsv' 2>/dev/null \
-            || printf 'invalid\t0\n'
-    )
-
     log "  prom service: ${prom_svc}:${prom_port}"
-    log "  /-/ready=${ready_code}  /api/v1/query?query=up http=${qcode}  status=${api_status} result_count=${result_count}"
-    if [[ "${ready_code}" =~ ^2[0-9][0-9]$ \
-        && "${qcode}" =~ ^2[0-9][0-9]$ \
-        && "${api_status}" == "success" \
-        && "${result_count}" =~ ^[0-9]+$ \
-        && "${result_count}" -gt 0 ]]; then
+    log "  /-/ready=${ready_code}"
+    if [[ "${ready_code}" =~ ^2[0-9][0-9]$ && "${check_failed}" -eq 0 ]]; then
         record PASS "7.prom-metric"
     else
-        record FAIL "7.prom-metric" "ready=${ready_code} query=${qcode} status=${api_status} results=${result_count}"
+        record FAIL "7.prom-metric" "ready=${ready_code} product_signals_complete=$((1 - check_failed))"
     fi
 }
 
@@ -470,24 +550,35 @@ check_8_grafana_ds() {
     track_port_forward "${pid}"
     sleep 1
 
-    local code body ds_count
-    code=$(curl -sS -m 5 -u admin:admin -o /tmp/verify_grafana_ds.json -w '%{http_code}' \
+    local code body ds_count ds_names response_file
+    response_file=$(mktemp)
+    code=$(curl -sS -m 5 -u admin:admin -o "${response_file}" -w '%{http_code}' \
         "http://127.0.0.1:${graf_pf}/api/datasources" 2>/dev/null) || code=000
-    body=$(cat /tmp/verify_grafana_ds.json 2>/dev/null || echo "")
-    ds_count=$(printf '%s' "${body}" | jq 'length' 2>/dev/null || echo 0)
+    body=$(cat "${response_file}" 2>/dev/null || echo "")
+    rm -f "${response_file}"
+    read -r ds_count ds_names < <(
+        printf '%s' "${body}" | jq -er '
+            if type == "array" and all(.[]; (.name | type) == "string")
+            then [length, ([.[].name] | sort | join(","))] | @tsv
+            else error("datasources must be an array with names")
+            end
+        ' 2>/dev/null || printf '0\tinvalid\n'
+    )
 
     stop_port_forwards "${pid}"
 
-    log "  /api/datasources http=${code}  count=${ds_count}"
-    if [[ "${code}" =~ ^2[0-9][0-9]$ && "${ds_count}" -ge 1 ]]; then
+    log "  /api/datasources http=${code}  count=${ds_count} names=${ds_names}"
+    if [[ "${code}" =~ ^2[0-9][0-9]$ \
+        && "${ds_count}" == "4" \
+        && "${ds_names}" == "Alertmanager,Loki,Prometheus,Tempo" ]]; then
         record PASS "8.grafana-datasources"
     else
-        record FAIL "8.grafana-datasources" "http=${code} count=${ds_count}"
+        record FAIL "8.grafana-datasources" "http=${code} count=${ds_count} names=${ds_names}"
     fi
 }
 
 check_9_grafana_dashboard() {
-    hdr "Check 9: Grafana dashboard service-overview"
+    hdr "Check 9: Grafana dashboards"
     if ! kubectl -n "${OBS_NS}" get svc grafana >/dev/null 2>&1; then
         record DEFERRED-PENDING-DEPLOY "9.grafana-dashboard" "grafana service not present"
         return
@@ -499,19 +590,38 @@ check_9_grafana_dashboard() {
     track_port_forward "${pid}"
     sleep 1
 
-    local code body dashboard_uid
-    code=$(curl -sS -m 5 -u admin:admin -o /tmp/verify_grafana_dashboard.json -w '%{http_code}' \
-        "http://127.0.0.1:${graf_pf}/api/dashboards/uid/service-overview" 2>/dev/null) || code=000
-    body=$(cat /tmp/verify_grafana_dashboard.json 2>/dev/null || echo "")
-    dashboard_uid=$(printf '%s' "${body}" | jq -er '.dashboard.uid | select(type == "string")' 2>/dev/null || printf 'invalid')
+    local -a dashboard_uids=(
+        service-overview
+        red-cart
+        red-catalog
+        red-checkout
+        red-inventory
+        red-order
+        red-payment
+        trace-explorer
+        log-explorer
+        slo-status
+    )
+    local code body dashboard_uid expected_uid response_file check_failed=0
+    for expected_uid in "${dashboard_uids[@]}"; do
+        response_file=$(mktemp)
+        code=$(curl -sS -m 5 -u admin:admin -o "${response_file}" -w '%{http_code}' \
+            "http://127.0.0.1:${graf_pf}/api/dashboards/uid/${expected_uid}" 2>/dev/null) || code=000
+        body=$(cat "${response_file}" 2>/dev/null || echo "")
+        rm -f "${response_file}"
+        dashboard_uid=$(printf '%s' "${body}" | jq -er '.dashboard.uid | select(type == "string")' 2>/dev/null || printf 'invalid')
+        log "  dashboard=${expected_uid} http=${code} uid=${dashboard_uid}"
+        if [[ "${code}" != "200" || "${dashboard_uid}" != "${expected_uid}" ]]; then
+            check_failed=1
+        fi
+    done
 
     stop_port_forwards "${pid}"
 
-    log "  /api/dashboards/uid/service-overview http=${code} uid=${dashboard_uid}"
-    if [[ "${code}" == "200" && "${dashboard_uid}" == "service-overview" ]]; then
+    if [[ "${check_failed}" -eq 0 ]]; then
         record PASS "9.grafana-dashboard"
     else
-        record FAIL "9.grafana-dashboard" "http=${code} uid=${dashboard_uid} (dashboard may not be provisioned yet)"
+        record FAIL "9.grafana-dashboard" "one or more of 10 dashboard UIDs are unavailable"
     fi
 }
 
@@ -534,10 +644,12 @@ check_10_prom_rules() {
     track_port_forward "${pid}"
     sleep 1
 
-    local code body api_status group_count rule_count recording_count alert_count
-    code=$(curl -sS -m 5 -o /tmp/verify_rules.json -w '%{http_code}' \
+    local code body api_status group_count rule_count recording_count alert_count response_file
+    response_file=$(mktemp)
+    code=$(curl -sS -m 5 -o "${response_file}" -w '%{http_code}' \
         "http://127.0.0.1:${pf}/api/v1/rules" 2>/dev/null) || code=000
-    body=$(cat /tmp/verify_rules.json 2>/dev/null || echo "")
+    body=$(cat "${response_file}" 2>/dev/null || echo "")
+    rm -f "${response_file}"
     read -r api_status group_count rule_count recording_count alert_count < <(
         printf '%s' "${body}" | jq -er '
             if (.data.groups | type) != "array" then error("groups is not an array") else
@@ -593,10 +705,12 @@ check_11_incident_engine() {
     track_port_forward "${pid}"
     sleep 1
 
-    local code body arr_len
-    code=$(curl -sS -m 5 -o /tmp/verify_inc.json -w '%{http_code}' \
+    local code body arr_len response_file
+    response_file=$(mktemp)
+    code=$(curl -sS -m 5 -o "${response_file}" -w '%{http_code}' \
         "http://127.0.0.1:${pf}/incidents" 2>/dev/null) || code=000
-    body=$(cat /tmp/verify_inc.json 2>/dev/null || echo "")
+    body=$(cat "${response_file}" 2>/dev/null || echo "")
+    rm -f "${response_file}"
     arr_len=$(printf '%s' "${body}" | jq 'if type == "array" then length else -1 end' 2>/dev/null || echo -1)
 
     stop_port_forwards "${pid}"
