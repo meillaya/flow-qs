@@ -38,6 +38,12 @@ POST /checkout  --[cart HTTP]-> cart-service
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4317` | OTLP gRPC endpoint |
 | `ENABLE_OTLP_EXPORTER` | true | Set to `false` for tests / no-Collector runs |
 
+User-facing requests emit the explicit `http.server.request.duration`
+histogram over OTLP. The normalized Prometheus family is
+`http_server_request_duration_seconds_*` with `service_name`,
+`http_response_status_code`, and route-template `http_route` labels. Probe
+routes are excluded.
+
 ## Local run
 
 ```bash

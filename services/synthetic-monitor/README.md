@@ -8,8 +8,10 @@ In-cluster synthetic health monitor for the Enten v2 e-commerce services.
 - Emits OpenTelemetry metrics:
   - `synthetic_check_success{service="X"}` — `1` on HTTP 200, otherwise `0`.
   - `synthetic_check_duration_seconds{service="X"}` — request latency.
-- Exports metrics via OTLP to `http://otel-collector.observability:4317`.
-- Exposes a Prometheus-compatible `/metrics` endpoint as a fallback when the OTLP collector is unavailable.
+- Exports metrics via OTLP to `http://otel-collector.observability:4317` and
+  simultaneously exposes the same process metrics at the Prometheus-compatible
+  `/metrics` endpoint. The two readers are independent; `/metrics` is not an
+  OTLP failover mechanism.
 - Logs `synthetic_failure` after three consecutive failures for a service.
 
 ## Default targets
@@ -36,8 +38,9 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ## Build and push
 
 ```bash
-docker build -t localhost:38053/synthetic-monitor:dev .
-docker push localhost:38053/synthetic-monitor:dev
+IMAGE_TAG=<immutable-tag>
+docker build -t "localhost:38053/synthetic-monitor:${IMAGE_TAG}" .
+docker push "localhost:38053/synthetic-monitor:${IMAGE_TAG}"
 ```
 
 ## Deploy

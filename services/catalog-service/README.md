@@ -33,9 +33,18 @@ uv run ty check .
 ## Docker
 
 ```bash
-docker build -t k3d-observability-registry:5000/catalog-service:dev .
-docker push k3d-observability-registry:5000/catalog-service:dev
+IMAGE_TAG=<immutable-tag>
+docker build -t "k3d-observability-registry:5000/catalog-service:${IMAGE_TAG}" .
+docker push "k3d-observability-registry:5000/catalog-service:${IMAGE_TAG}"
 ```
+
+## HTTP SLI metrics
+
+Requests other than `/healthz`, `/readyz`, and `/metrics` emit the
+`http.server.request.duration` histogram over OTLP. Its Prometheus-normalized
+family is `http_server_request_duration_seconds_*`, partitioned by
+`service_name`, `http_response_status_code`, and the route template in
+`http_route`.
 
 ## Helm
 
