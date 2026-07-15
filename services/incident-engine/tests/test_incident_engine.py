@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 os.environ["INCIDENT_ENGINE_DISABLE_OTEL"] = "1"
 
@@ -260,6 +264,93 @@ async def test_failed_incident_notification_does_not_log_webhook_secret(caplog) 
     assert sent is False
     assert "SECRET" not in caplog.text
     assert "PRIVATE" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_incident_notification_emits_no_secret_bearing_http_span() -> None:
+    """Secret-bearing webhook URLs never enter exported HTTP span attributes."""
+    from app.clients import HTTPXUpstreamContext
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    instrumentor = HTTPXClientInstrumentor()
+    instrumentor.uninstrument()
+    instrumentor.instrument(tracer_provider=provider)
+    secret_url = "https://hooks.example.test/services/SECRET/TOKEN?key=PRIVATE"
+    try:
+        with respx.mock() as mock:
+            mock.post(secret_url).respond(500)
+            async with httpx.AsyncClient() as client:
+                context = HTTPXUpstreamContext(
+                    tempo_url="http://tempo.test",
+                    loki_url="http://loki.test",
+                    prom_url="http://prom.test",
+                    client=client,
+                )
+                await context.notify_webhook(secret_url, {"status": "firing"})
+    finally:
+        instrumentor.uninstrument()
+
+    finished_spans = exporter.get_finished_spans()
+    assert finished_spans == ()
+
+
+class WindowRecordingContext(StaticUpstreamContext):
+    """Capture every correlation query interval for boundary assertions."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.windows: list[tuple[datetime, datetime]] = []
+
+    async def fetch_traces(
+        self, service: str, start: datetime, end: datetime, limit: int = 10
+    ) -> list[TraceHit]:
+        del service, limit
+        self.windows.append((start, end))
+        return []
+
+    async def fetch_logs(
+        self,
+        service: str,
+        start: datetime,
+        end: datetime,
+        limit: int = 20,
+        trace_ids: list[str] | None = None,
+    ) -> list[LogHit]:
+        del service, limit, trace_ids
+        self.windows.append((start, end))
+        return []
+
+    async def fetch_metrics(
+        self, service: str, start: datetime, end: datetime
+    ) -> list[MetricSnapshot]:
+        del service
+        self.windows.append((start, end))
+        return []
+
+
+@pytest.mark.parametrize(
+    "starts_at",
+    ["0001-01-01T00:00:00Z", "9999-12-31T23:59:59Z"],
+)
+def test_webhook_bounds_hostile_correlation_windows(
+    temp_paths: dict[str, str], starts_at: str
+) -> None:
+    """Extreme alert timestamps cannot expand upstream correlation queries."""
+    context = WindowRecordingContext()
+    alert = _make_alert().model_copy(update={"startsAt": starts_at, "endsAt": None})
+    payload = AlertmanagerPayload(status="firing", alerts=[alert])
+    app = create_app(context=context)
+
+    with TestClient(app) as client:
+        response = client.post("/webhook", json=payload.model_dump())
+
+    assert response.status_code == 200
+    assert len(context.windows) == 3
+    for query_start, query_end in context.windows:
+        assert query_start <= query_end
+        assert query_end - query_start <= timedelta(hours=1)
 
 
 @pytest.mark.asyncio

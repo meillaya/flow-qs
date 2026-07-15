@@ -1,3 +1,5 @@
+> **Historical illustration:** this narrative predates the current gRPC timeout, Chaos Mesh, and strict causal-demo contracts. It is a documentation example, not runtime evidence.
+
 # Postmortem: Checkout Failures Due to Payment Gateway Network Delay
 
 ## Summary

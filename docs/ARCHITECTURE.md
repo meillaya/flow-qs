@@ -17,6 +17,7 @@ graph TB
         checkout[checkout-service<br/>Python/FastAPI :8003]
         order[order-service<br/>Python/FastAPI :8004]
         payment[payment-gateway<br/>Go/Chi HTTP :8005 gRPC :50052]
+        synthetic[synthetic-monitor<br/>Python/FastAPI :8000]
     end
 
     subgraph Observability["Observability (observability namespace)"]
@@ -51,6 +52,8 @@ graph TB
     order -->|OTLP| otel
     payment -->|OTLP traces| otel
     payment -->|Prometheus scrape| prom
+    synthetic -->|HTTP probes| checkout
+    synthetic -->|OTLP| otel
 
     Services -->|container stdout/stderr| agents
     agents -->|OTLP logs| otel
@@ -81,6 +84,7 @@ graph TB
 | checkout-service | Python | FastAPI :8003 | Saga orchestrator: cart, inventory, payment, order. Compensation on failure. |
 | order-service | Python | FastAPI :8004 | Order persistence. SQLite backend. |
 | payment-gateway | Go | Chi HTTP :8005 + gRPC :50052 | Mock payment charge/refund. In-memory store. |
+| synthetic-monitor | Python | FastAPI :8000 | Probes checkout in-cluster and exports availability telemetry. |
 | incident-engine | Python | FastAPI :8088 | Receives Alertmanager webhooks and writes Markdown postmortems. |
 
 ## Inter-service Protocols
@@ -173,7 +177,7 @@ Chaos Mesh experiments in `chaos/experiments/`:
 | cpu-stress-catalog | catalog-service | CPU exhaustion |
 | dns-chaos-inventory | inventory-service | DNS failure |
 
-`make demo` applies one experiment at a time, waits for a Prometheus alert, then lets the incident engine generate a postmortem.
+`make demo` starts load, applies a causal checkout PodChaos, waits for its correlated ServiceDown postmortem, then starts the recurring checkout workflow while the load remains active. It removes the workflow, PodChaos, workflow nodes, and load Job on every exit path.
 
 ## Related Docs
 

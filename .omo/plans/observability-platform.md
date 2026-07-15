@@ -1,3 +1,5 @@
+> **Historical plan:** implementation-time assumptions below are preserved for decision history. Current executable contracts and the no-input completion instruction supersede stale versions/approval gates.
+
 # Distributed Observability + Incident Response Platform
 
 ## TL;DR
@@ -55,13 +57,13 @@ Pre-planning analyst (Metis) timed out before producing findings. Planner applie
 - **Resource constraints**: k3d created with 6 GB server + 4 GB agent memory; each service capped at 256 MB requests / 512 MB limits.
 - **Secret management**: N/A — no real payment processor, no external API keys. Documented.
 - **Graceful shutdown**: All services must implement SIGTERM handlers with 10s drain window. Standard FastAPI lifespan + Go signal.Notify context.
-- **Postmortem examples**: 2 example postmortems committed: one real (from chaos test run) + one annotated template.
+- **Postmortem examples**: 2 example postmortems committed: one historical illustration + one annotated template; live evidence is stored separately.
 - **Grafana provisioning**: 100% YAML-file-based, no UI click-ops. Datasources, dashboards, alert contact points all provisioned.
 - **Tempo/Loki/Prometheus storage**: local FS in PVCs. Retention: Tempo 7d (168h block retention), Loki 7d (168h), Prometheus 15d (longer is fine for metrics — they're cheap and useful for SLO burn-rate window math). Documented as demo-grade.
 - **k6 location**: Runs as Kubernetes `Job` (k6-owned image) inside the cluster, hits services via ClusterIP DNS. Cleaner than host-side runs.
 - **Chaos Mesh RBAC**: Installed via Helm with `--set controllerManager.serviceAccount=rbac enabled`; experiments created in dedicated `chaos-testing` namespace.
 - **OTel version compat**: Lock both `opentelemetry-python` and `go.opentelemetry.io/otel` to v1.27+ (latest stable at plan time). OTLP v1 over gRPC.
-- **CI**: GitHub Actions with `ubuntu-latest` runners; matrix on Python 3.12 / Go 1.22; push to `ghcr.io` (GitHub Container Registry).
+- **CI**: GitHub Actions with `ubuntu-latest` runners; matrix on Python 3.12 / Go 1.26.5; push to `ghcr.io` (GitHub Container Registry).
 - **Test tooling**: `pytest`, `pytest-asyncio`, `httpx` (test client), `testcontainers` (for integration with real Tempo/Loki/Prom in CI), `grpcurl` (gRPC QA), `k6` (load QA), `kubectl` + `kustomize` (K8s QA).
 
 ### Execution-time compatibility amendments
@@ -69,7 +71,7 @@ Pre-planning analyst (Metis) timed out before producing findings. Planner applie
 Live failing-first verification established five necessary corrections to the original draft:
 
 - devenv 2.x declares executable scripts in `devenv.nix`; `devenv.yaml` is reserved for inputs/configuration.
-- The development shell uses the Go release from the locked devenv rolling nixpkgs input; the payment module, CI, and container build continue to enforce Go 1.22 compatibility.
+- The development shell uses the Go release from the locked devenv rolling nixpkgs input; the payment module, CI, and container build enforce Go 1.26.5 consistently.
 - The Collector's synchronized repository-owned Helm chart is the deployment source of truth; maintaining a second Kustomize deployment path caused configuration drift.
 - Tempo 2.9 rejects `querier.max_query_duration`, so the removed field must not be reintroduced.
 - Loki 3.x schema v13 uses TSDB/tsdb-shipper; boltdb-shipper is a legacy store incompatible with the selected chart contract.
@@ -117,7 +119,7 @@ Ship a runnable, portfolio-grade Kubernetes-deployed observability platform that
 - Synthetic monitor as Python script running in-cluster
 - Terraform under `infra/` provisioning the k3d cluster
 - Helm chart per service under `charts/<service>/`
-- `devenv.nix` + `devenv.yaml` providing Python 3.12, Go from locked rolling nixpkgs, k6, terraform, kubectl, helm, kustomize, gRPC tools
+- `devenv.nix` + `devenv.yaml` providing Python 3.12, Go 1.26.5 via the locked toolchain contract, k6, terraform, kubectl, helm, kustomize, gRPC tools
 - GitHub Actions workflows for lint, test, build (under `.github/workflows/`)
 - README.md, ARCHITECTURE.md, RUNBOOK.md under `docs/`
 - ≥1 example postmortem.md under `docs/examples/postmortems/`
@@ -219,14 +221,14 @@ Wave 4 (Integration + E2E + docs — depends on alerts/AM from Wave 3):
 ├── Task 24: Full demo orchestration script (Makefile target: make demo = load → chaos → wait → verify postmortem)
 └── Task 25: Documentation (README.md, ARCHITECTURE.md, RUNBOOK.md, docs/examples/postmortems/incident-2026-XX-XX.md)
 
-Wave FINAL (4 parallel reviews, then user explicit OK):
+Wave FINAL (historical draft; current autonomous instruction requires no user input):
 ├── Task F1: Plan compliance audit (oracle)
 ├── Task F2: Code quality + lint + type-check review
 ├── Task F3: Real E2E QA from clean state (devenv up → demo → verify)
 └── Task F4: Scope fidelity check (no AI slop, no scope creep)
-→ Present results → Get explicit user OK before completion
+→ Present results after autonomous verification
 
-Critical Path: T1 (devenv) → T2 (k3d) → T3 (Collector) → T13 (checkout) → T16 (alert rules) → T22 (incident-engine) → T23 (E2E) → T24 (demo) → F1-F4 → user OK
+Critical Path: T1 (devenv) → T2 (k3d) → T3 (Collector) → T13 (checkout) → T16 (alert rules) → T22 (incident-engine) → T23 (E2E) → T24 (demo) → F1-F4 → verified completion
 Parallel Speedup: ~75% faster than sequential
 Max Concurrent: 8 (Waves 1, 3)
 ```
@@ -277,7 +279,7 @@ Note: Wave numbering renumbered from the originally drafted 6-wave structure to 
 > The /start-work progress counter requires exact format. Deviation = progress shows 0/0.
 > Final Verification Wave labels MUST use `F1.`, `F2.`, etc. — NOT `T-F1.`, `F-1.`, `Final 1:`.
 
-- [x] 1. devenv.sh + Nix flakes for Python 3.12, Go from locked rolling nixpkgs, k6, kubectl, helm, terraform, gRPC tools
+- [x] 1. devenv.sh + Nix flakes for Python 3.12, Go 1.26.5 via the locked toolchain contract, k6, kubectl, helm, terraform, gRPC tools
 
   **What to do**:
   - Create `devenv.nix` providing all required tooling with pinned versions

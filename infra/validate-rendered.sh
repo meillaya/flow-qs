@@ -33,6 +33,10 @@ while IFS=',' read -r release namespace chart image_key; do
   grep -q ":$immutable_tag" "$tmp/$release"
   grep -q 'name: OTEL_SEMCONV_STABILITY_OPT_IN' "$tmp/$release"
   grep -A1 'name: OTEL_SEMCONV_STABILITY_OPT_IN' "$tmp/$release" | grep -Eq 'value: "?http"?'
+  grep -q 'runAsNonRoot: true' "$tmp/$release"
+  grep -q 'type: RuntimeDefault' "$tmp/$release"
+  grep -q 'allowPrivilegeEscalation: false' "$tmp/$release"
+  grep -A2 'drop:' "$tmp/$release" | grep -q -- '- ALL'
   if grep -Eq 'image:.*:dev(["[:space:]]|$)' "$tmp/$release"; then
     echo "$release retained a mutable dev application image" >&2
     exit 1

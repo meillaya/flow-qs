@@ -61,7 +61,7 @@ kubectl -n observability port-forward svc/prometheus-alertmanager 9093:9093
 - [docs/RUNBOOK.md](docs/RUNBOOK.md): common operations, recovery steps, and cookbooks
 - [docs/DEMO.md](docs/DEMO.md): what `make demo` does and how to interpret results
 - [docs/SETUP.md](docs/SETUP.md): full setup instructions and prerequisites
-- [docs/examples/postmortems/](docs/examples/postmortems/): annotated template and real example postmortems
+- [docs/examples/postmortems/](docs/examples/postmortems/): annotated template and historical illustrative postmortems
 
 ## Repository Layout
 

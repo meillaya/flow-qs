@@ -186,10 +186,11 @@ There is no automatic backup or in-place migration promise.
 
 `make down` is idempotent and removes project releases, namespaces, the owned
 k3d cluster, registry, containers, network, volumes, kubeconfig, load Jobs,
-and port-forward processes. It refuses to auto-delete an unknown cluster whose
-identity does not match the project contract. `make clean` performs the same
-ownership-gated runtime teardown and then removes repository-local generated
-and cache artifacts.
+and owned storage. It refuses to auto-delete an unknown cluster whose identity
+does not match the project contract. Demo and verifier port-forwards are reaped
+by their own signal-safe traps. `make clean` performs the same ownership-gated
+runtime teardown and removes Terraform state plus repository-local environment,
+Python, test, coverage, and temporary evidence caches.
 
 ## Troubleshooting
 

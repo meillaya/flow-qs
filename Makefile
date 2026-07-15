@@ -229,6 +229,9 @@ clean: clean-runtime ## Remove runtime resources, Terraform state, and local art
 	@echo "Removing devenv state..."
 	@if [[ -d .devenv/state ]]; then chmod -R u+w .devenv/state; fi
 	@rm -rf .devenv/state .venv .direnv
+	@echo "Removing service and test caches..."
+	@find services -type d \( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache -o -name .coverage \) -prune -exec rm -rf {} +
+	@find services -type f \( -name .coverage -o -name 'coverage.out' \) -delete
 	@echo "Removing generated evidence..."
 	@find .omo/evidence -type f -name 'tmp-*' -delete 2>/dev/null || true
 	@echo "Clean complete."

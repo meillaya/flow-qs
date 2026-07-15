@@ -38,14 +38,13 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ## Build and push
 
 ```bash
-IMAGE_TAG=<immutable-tag>
-docker build -t "localhost:38053/synthetic-monitor:${IMAGE_TAG}" .
-docker push "localhost:38053/synthetic-monitor:${IMAGE_TAG}"
+# From the repository root; discovers the current registry host port.
+make build-push-images
 ```
 
 ## Deploy
 
 ```bash
 helm upgrade --install synthetic-monitor charts/synthetic-monitor \
-  --namespace observability --create-namespace
+  --namespace ecom --create-namespace
 ```

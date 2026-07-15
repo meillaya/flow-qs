@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import httpx
+from opentelemetry.instrumentation.utils import suppress_http_instrumentation
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +239,10 @@ class HTTPXUpstreamContext:
         if not url:
             return False
         try:
-            response = await self._client.post(url, json=payload, timeout=self.timeout)
+            # Webhook URLs commonly contain credentials in their path. Suppress
+            # automatic HTTP spans so those credentials never reach Tempo.
+            with suppress_http_instrumentation():
+                response = await self._client.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
             return True
         except httpx.HTTPStatusError as exc:

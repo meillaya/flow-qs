@@ -12,7 +12,7 @@ This directory contains the human-facing documentation for the Enten v2 observab
 ## Examples
 
 - [examples/postmortems/template.md](./examples/postmortems/template.md): annotated postmortem template.
-- [examples/postmortems/incident-2026-07-09-checkout-failures.md](./examples/postmortems/incident-2026-07-09-checkout-failures.md): real example postmortem from a payment gateway network delay incident.
+- [examples/postmortems/incident-2026-07-09-checkout-failures.md](./examples/postmortems/incident-2026-07-09-checkout-failures.md): historical illustrative postmortem (not evidence from the current demo contract).
 
 ## Project Root
 

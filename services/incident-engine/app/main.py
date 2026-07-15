@@ -59,6 +59,7 @@ TEMPO_URL = os.getenv("TEMPO_URL", "http://tempo.observability:3200")
 LOKI_URL = os.getenv("LOKI_URL", "http://loki.observability:3100")
 PROM_URL = os.getenv("PROM_URL", "http://prometheus.observability")
 LOOKBACK_MINUTES = int(os.getenv("LOOKBACK_MINUTES", "5"))
+CORRELATION_HORIZON = timedelta(hours=1)
 RESOLVE_TIMEOUT_MINUTES = int(os.getenv("RESOLVE_TIMEOUT_MINUTES", "30"))
 OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.observability:4317")
 
@@ -306,8 +307,14 @@ async def _process_alert(
     if not is_resolved:
         ends_at = None
 
-    lookback_end = ends_at or datetime.now(UTC)
-    lookback_start = starts_at - timedelta(minutes=LOOKBACK_MINUTES)
+    now = datetime.now(UTC)
+    lookback_end = min(ends_at or now, now)
+    earliest_start = lookback_end - CORRELATION_HORIZON
+    correlation_starts_at = min(max(starts_at, earliest_start), lookback_end)
+    lookback_start = max(
+        correlation_starts_at - timedelta(minutes=LOOKBACK_MINUTES),
+        earliest_start,
+    )
 
     traces = await state.context.fetch_traces(service, lookback_start, lookback_end)
     logs = await state.context.fetch_logs(
@@ -319,11 +326,11 @@ async def _process_alert(
     metrics_snapshots = await state.context.fetch_metrics(service, lookback_start, lookback_end)
 
     experiments = (
-        await state.chaos.list_active(service, starts_at)
+        await state.chaos.list_active(service, correlation_starts_at)
         if state.chaos is not None
         else _chaos_state_snapshot()
     )
-    correlated = correlate_chaos(service, experiments, starts_at)
+    correlated = correlate_chaos(service, experiments, correlation_starts_at)
     incident_id = uuid.uuid5(
         uuid.NAMESPACE_OID,
         f"{fingerprint}:{starts_at.isoformat()}",

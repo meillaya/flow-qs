@@ -80,7 +80,7 @@ Symptoms: Alertmanager UI shows an alert; PagerDuty/Slack notification; Grafana 
 
 ### Postmortem was not generated
 
-Symptoms: Alert fired but no new Markdown file appears in `docs/examples/postmortems/`.
+Symptoms: Alert fired but no postmortem appears on the incident-engine PVC at `/postmortems`. The host `docs/examples/postmortems/` directory changes only when `make demo` copies its correlated result out of the pod.
 
 1. Check the incident engine pod:
 

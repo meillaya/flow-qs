@@ -33,9 +33,8 @@ uv run ty check .
 ## Docker
 
 ```bash
-IMAGE_TAG=<immutable-tag>
-docker build -t "k3d-observability-registry:5000/catalog-service:${IMAGE_TAG}" .
-docker push "k3d-observability-registry:5000/catalog-service:${IMAGE_TAG}"
+# From the repository root; discovers the current registry host port.
+make build-push-images
 ```
 
 ## HTTP SLI metrics

@@ -60,16 +60,15 @@ INCIDENT_ENGINE_DISABLE_OTEL=1 uv run uvicorn app.main:app --host 0.0.0.0 --port
 uv run pytest
 ```
 
-The default `pyproject.toml` configures pytest to fail under 80% coverage and
-expects at least the 13 unit tests in `tests/test_incident_engine.py` to pass.
+The default `pyproject.toml` configures pytest to fail under 80% coverage; the
+current suite contains 40 focused incident, context, lifecycle, and security tests.
 The upstream API calls are mocked with `respx` and `StaticUpstreamContext`.
 
 ## Build and push
 
 ```bash
-IMAGE_TAG=<immutable-tag>
-docker build -t "localhost:38053/incident-engine:${IMAGE_TAG}" .
-docker push "localhost:38053/incident-engine:${IMAGE_TAG}"
+# From the repository root; discovers the current registry host port.
+make build-push-images
 ```
 
 ## Deploy
