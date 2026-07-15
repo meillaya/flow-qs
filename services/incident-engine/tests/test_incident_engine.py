@@ -715,7 +715,17 @@ async def test_resolve_reconciler_marks_stale_incidents(temp_paths, static_conte
             pass
 
         detail = client.get(f"/incidents/{incident_id}").json()
+        persisted = store.get(incident_id)
+        assert persisted is not None
+        postmortem_path = Path(persisted.file_path)
+        if not postmortem_path.is_absolute():
+            postmortem_path = store.postmortem_dir / postmortem_path.name
+        durable_postmortem = postmortem_path.read_text()
     assert detail["status"] == "resolved"
+    assert "still being tracked" not in detail["summary"]
+    assert "is still firing" not in durable_postmortem
+    assert "resolved" in durable_postmortem
+    assert any("resolved" in event["message"] for event in detail["timeline"])
 
 
 def _build_sample_record():

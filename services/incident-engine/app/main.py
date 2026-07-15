@@ -200,7 +200,34 @@ async def _resolve_reconciler(state: AppState) -> None:
                     record.status = "resolved"
                     record.ends_at = now.isoformat()
                     record.updated_at = now.isoformat()
+                    resolution = TimelineEvent(
+                        timestamp=now.isoformat(),
+                        source="alertmanager",
+                        message=(
+                            f"Alert '{record.alertname}' resolved for service "
+                            f"'{record.service}'"
+                        ),
+                        severity="info",
+                        details={
+                            "alertname": record.alertname,
+                            "service": record.service,
+                        },
+                    )
+                    timeline_events = [
+                        TimelineEvent(**event) for event in record.timeline
+                    ]
+                    if not any(
+                        event.source == resolution.source
+                        and event.message == resolution.message
+                        for event in timeline_events
+                    ):
+                        timeline_events.append(resolution)
+                        timeline_events.sort(key=lambda event: parse_iso(event.timestamp))
+                    record.timeline = [event.to_dict() for event in timeline_events]
+                    record.summary = build_summary(record)
                     state.store.upsert(record)
+                    markdown = render_postmortem(record, timeline_events)
+                    state.store.write_postmortem(record, markdown)
                     incidents_processed.add(1, {"alertname": record.alertname})
                     logger.info(
                         "incident_resolved_timeout: id=%s alertname=%s service=%s",

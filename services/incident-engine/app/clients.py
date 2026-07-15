@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -106,17 +107,30 @@ class HTTPXUpstreamContext:
             logger.warning("tempo fetch failed: %s", exc)
             return []
 
+        if not isinstance(data, dict):
+            logger.warning("tempo fetch failed: response is not an object")
+            return []
+        traces = data.get("traces", [])
+        if not isinstance(traces, list):
+            logger.warning("tempo fetch failed: traces is not an array")
+            return []
+
         hits: list[TraceHit] = []
-        for trace in (data.get("traces", []) or [])[:limit]:
+        for trace in traces[:limit]:
             if not isinstance(trace, dict):
                 continue
-            raw_trace_id = str(trace.get("traceID") or trace.get("traceId") or "")
-            if not raw_trace_id:
+            raw_trace_id = trace.get("traceID") or trace.get("traceId")
+            if not isinstance(raw_trace_id, str) or not re.fullmatch(
+                r"[a-fA-F0-9]{1,64}", raw_trace_id
+            ):
                 continue
             try:
                 trace_id = raw_trace_id.zfill(32)
-                root = trace.get("rootServiceName") or ""
+                raw_root = trace.get("rootServiceName")
+                root = raw_root if isinstance(raw_root, str) else ""
                 duration_ms = float(trace.get("durationMs") or 0)
+                if not math.isfinite(duration_ms):
+                    continue
                 start_time_ns = int(trace.get("startTimeUnixNano") or 0)
                 start_iso = (
                     datetime.fromtimestamp(

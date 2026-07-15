@@ -31,10 +31,16 @@ async def test_fetches_tempo_contract_and_exact_trace_correlated_loki_log() -> N
                 "durationMs": 8,
             },
             {
-                "traceID": "malformed-trace",
+                "traceID": "deadbeef",
                 "rootServiceName": "checkout-service",
                 "startTimeUnixNano": "not-a-number",
                 "durationMs": "not-a-number",
+            },
+            {
+                "traceID": {"nested": "bad"},
+                "rootServiceName": "checkout-service",
+                "startTimeUnixNano": "1783751446172507001",
+                "durationMs": "NaN",
             },
             {"rootServiceName": "checkout-service", "startTimeUnixNano": "1783751446"},
         ]
@@ -70,6 +76,21 @@ async def test_fetches_tempo_contract_and_exact_trace_correlated_loki_log() -> N
     assert traces[0].start_time == "2026-07-11T06:30:46.172507+00:00"
     assert traces[0].duration_ms == 8
     assert logs[0].labels["trace_id"] == trace_id
+
+
+@pytest.mark.asyncio
+async def test_non_object_tempo_payload_degrades_to_empty_context() -> None:
+    """A valid JSON scalar from Tempo cannot fail incident ingestion."""
+    now = datetime.now(UTC)
+    async with httpx.AsyncClient() as client:
+        context = HTTPXUpstreamContext(
+            "http://tempo.test", "http://loki.test", "http://prom.test", client=client
+        )
+        with respx.mock as router:
+            router.get("http://tempo.test/api/search").respond(json=[])
+            traces = await context.fetch_traces("checkout-service", now, now)
+
+    assert traces == []
 
 
 @pytest.mark.asyncio
