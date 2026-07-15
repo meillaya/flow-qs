@@ -1,16 +1,17 @@
 service: end-to-end-checkout
+metric_service: checkout-service
 slos:
   - name: success_rate
     sli:
-      spec: checkout_end_to_end_requests_total{status!~"5.."}
-      total_spec: checkout_end_to_end_requests_total
+      spec: http_server_request_duration_seconds_count{http_route="/checkout",http_response_status_code!~"5.."}
+      total_spec: http_server_request_duration_seconds_count{http_route="/checkout"}
     objective: 0.99
     window: 30d
     error_budget: 432m0s
   - name: latency_p99
     sli:
-      spec: checkout_end_to_end_duration_seconds_bucket{le="2.0"}
-      total_spec: checkout_end_to_end_duration_seconds_count
+      spec: http_server_request_duration_seconds_bucket{http_route="/checkout",le="2.0"}
+      total_spec: http_server_request_duration_seconds_count{http_route="/checkout"}
     objective: 0.99
     window: 30d
     error_budget: 432m0s

@@ -1,0 +1,24 @@
+rule_files:
+  - sli_recording_rules.yaml
+
+evaluation_interval: 1d
+fuzzy_compare: true
+
+tests:
+  - interval: 1d
+    input_series:
+      - series: 'http_server_request_duration_seconds_count{service_name="catalog-service",http_response_status_code="200",http_route="/products"}'
+        values: '0+999x35'
+      - series: 'http_server_request_duration_seconds_count{service_name="catalog-service",http_response_status_code="503",http_route="/products"}'
+        values: '0+1x35'
+    promql_expr_test:
+      - expr: '{__name__="sli:catalog-service:availability:ratio_30d"}'
+        eval_time: 30d
+        exp_samples:
+          - labels: '{__name__="sli:catalog-service:availability:ratio_30d"}'
+            value: 0.999
+      - expr: '{__name__="slo:catalog-service:availability:error_budget_remaining:30d"}'
+        eval_time: 30d
+        exp_samples:
+          - labels: '{__name__="slo:catalog-service:availability:error_budget_remaining:30d"}'
+            value: -100.0000000000222

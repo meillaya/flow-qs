@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "RED metrics for payment-service: Rate, Errors, Duration. Templating variable $service available for ad-hoc switching.",
+  "description": "RED metrics for payment-gateway: Rate, Errors, Duration. Templating variable $service available for ad-hoc switching.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -85,7 +85,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m]))",
           "legendFormat": "rate"
         }
       ],
@@ -148,7 +148,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\"}[5m])), 1e-9)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m])), 1e-9)",
           "legendFormat": "error_ratio"
         }
       ],
@@ -211,7 +211,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"payment-service\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m])))",
           "legendFormat": "p99"
         }
       ],
@@ -287,7 +287,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m]))",
           "legendFormat": "rate"
         }
       ],
@@ -347,7 +347,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\",status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\",http_response_status_code=~\"5..\"}[5m]))",
           "legendFormat": "errors"
         }
       ],
@@ -407,7 +407,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"payment-service\"}[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m])))",
           "legendFormat": "p50"
         },
         {
@@ -416,7 +416,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"payment-service\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m])))",
           "legendFormat": "p95"
         },
         {
@@ -425,7 +425,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"payment-service\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m])))",
           "legendFormat": "p99"
         }
       ],
@@ -498,7 +498,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m]))",
           "legendFormat": "rate"
         }
       ],
@@ -553,7 +553,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "sum(rate(http_server_requests_total{namespace=\"ecom\",service=\"payment-service\",status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"ecom\",service_name=\"payment-gateway\",http_response_status_code=~\"5..\"}[5m]))",
           "legendFormat": "errors"
         }
       ],
@@ -616,7 +616,7 @@
             "type": "prometheus",
             "uid": "prometheus-observability"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_duration_seconds_bucket{namespace=\"ecom\",service=\"payment-service\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"ecom\",service_name=\"payment-gateway\"}[5m])))",
           "legendFormat": "p99"
         }
       ],
@@ -665,7 +665,7 @@
   "tags": [
     "observability-platform",
     "red",
-    "payment-service"
+    "payment-gateway"
   ],
   "templating": {
     "list": [
@@ -677,13 +677,13 @@
           "type": "prometheus",
           "uid": "prometheus-observability"
         },
-        "definition": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
-        "query": "label_values(http_server_requests_total{namespace=\"ecom\"}, service)",
+        "definition": "label_values(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}, service_name)",
+        "query": "label_values(http_server_request_duration_seconds_count{service_namespace=\"ecom\"}, service_name)",
         "regex": "",
         "current": {
           "selected": true,
-          "text": "payment-service",
-          "value": "payment-service"
+          "text": "payment-gateway",
+          "value": "payment-gateway"
         },
         "hide": 0,
         "refresh": 2,
@@ -722,7 +722,7 @@
     "type": "timepicker"
   },
   "timezone": "",
-  "title": "RED \u2014 payment-service",
+  "title": "RED \u2014 payment-gateway",
   "uid": "red-payment",
   "version": 1,
   "weekStart": ""

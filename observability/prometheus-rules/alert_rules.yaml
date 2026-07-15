@@ -79,9 +79,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(http_server_requests_total{status=~"5..", service_name="cart-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5..", service_name="cart-service"}[5m]))
             /
-            sum(rate(http_server_requests_total{service_name="cart-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_name="cart-service"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -93,7 +93,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{le="0.1", service_name="cart-service"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="cart-service"}[5m]))
           ) > 0.2000
         for: 5m
         labels:
@@ -184,9 +184,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(http_server_requests_total{status=~"5..", service_name="catalog-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5..", service_name="catalog-service"}[5m]))
             /
-            sum(rate(http_server_requests_total{service_name="catalog-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_name="catalog-service"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -198,7 +198,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{le="0.2", service_name="catalog-service"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="catalog-service"}[5m]))
           ) > 0.4000
         for: 5m
         labels:
@@ -289,9 +289,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(http_server_requests_total{status=~"5..", service_name="checkout-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5..", service_name="checkout-service"}[5m]))
             /
-            sum(rate(http_server_requests_total{service_name="checkout-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_name="checkout-service"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -303,7 +303,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{le="0.5", service_name="checkout-service"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="checkout-service"}[5m]))
           ) > 1.0000
         for: 5m
         labels:
@@ -384,9 +384,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(checkout_end_to_end_requests_total{status=~"5..", service_name="end-to-end-checkout"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_route="/checkout", http_response_status_code=~"5..", service_name="checkout-service"}[5m]))
             /
-            sum(rate(checkout_end_to_end_requests_total{service_name="end-to-end-checkout"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_route="/checkout", service_name="checkout-service"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -398,7 +398,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(checkout_end_to_end_duration_seconds_bucket{le="2.0", service_name="end-to-end-checkout"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{http_route="/checkout", service_name="checkout-service"}[5m]))
           ) > 4.0000
         for: 5m
         labels:
@@ -489,9 +489,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(http_server_requests_total{status=~"5..", service_name="inventory-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5..", service_name="inventory-service"}[5m]))
             /
-            sum(rate(http_server_requests_total{service_name="inventory-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_name="inventory-service"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -503,7 +503,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{le="0.15", service_name="inventory-service"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="inventory-service"}[5m]))
           ) > 0.3000
         for: 5m
         labels:
@@ -594,9 +594,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(http_server_requests_total{status=~"5..", service_name="order-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5..", service_name="order-service"}[5m]))
             /
-            sum(rate(http_server_requests_total{service_name="order-service"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_name="order-service"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -608,7 +608,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{le="0.3", service_name="order-service"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="order-service"}[5m]))
           ) > 0.6000
         for: 5m
         labels:
@@ -699,9 +699,9 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            sum(rate(http_server_requests_total{status=~"5..", service_name="payment-gateway"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5..", service_name="payment-gateway"}[5m]))
             /
-            sum(rate(http_server_requests_total{service_name="payment-gateway"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_name="payment-gateway"}[5m]))
           ) > 0.05
         for: 5m
         labels:
@@ -713,7 +713,7 @@ groups:
       - alert: HighLatencyP99
         expr: |
           histogram_quantile(0.99,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{le="1.0", service_name="payment-gateway"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="payment-gateway"}[5m]))
           ) > 2.0000
         for: 5m
         labels:

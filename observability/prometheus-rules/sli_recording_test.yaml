@@ -1,0 +1,26 @@
+rule_files:
+  - sli_recording_rules.yaml
+
+evaluation_interval: 1m
+fuzzy_compare: true
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_seconds_count{service_name="catalog-service",http_response_status_code="200",http_route="/products"}'
+        values: '0+90x12'
+      - series: 'http_server_request_duration_seconds_count{service_name="catalog-service",http_response_status_code="503",http_route="/products"}'
+        values: '0+10x12'
+      - series: 'http_server_request_duration_seconds_bucket{service_name="catalog-service",http_route="/products",le="0.2"}'
+        values: '0+90x12'
+    promql_expr_test:
+      - expr: '{__name__="sli:catalog-service:availability:ratio_5m"}'
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="sli:catalog-service:availability:ratio_5m"}'
+            value: 0.9
+      - expr: '{__name__="sli:catalog-service:latency_p99:ratio_5m"}'
+        eval_time: 10m
+        exp_samples:
+          - labels: '{__name__="sli:catalog-service:latency_p99:ratio_5m"}'
+            value: 0.9

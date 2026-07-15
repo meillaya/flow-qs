@@ -115,7 +115,8 @@ def merge_labels(base: dict[str, str], extra: dict[str, str]) -> str:
 def recording_rules_for_service(slo: dict) -> list[dict]:
     """Produce per-service recording rule definitions."""
     service: str = slo["service"]
-    extra = {"service_name": f'"{service}"'}
+    metric_service: str = slo.get("metric_service", service)
+    extra = {"service_name": f'"{metric_service}"'}
     rules: list[dict] = []
 
     for slo_def in slo["slos"]:
@@ -146,7 +147,8 @@ def recording_rules_for_service(slo: dict) -> list[dict]:
 
             budget_expr = (
                 f"(1 - (\n"
-                f"  (1 - sli:{service}:availability:ratio_30d) / (1 - {objective})\n"
+                f'  (1 - {{__name__="sli:{service}:availability:ratio_30d"}}) '
+                f"/ (1 - {objective})\n"
                 f")) * 100"
             )
             rules.append({
@@ -336,6 +338,7 @@ def standard_alerts(slo: dict) -> list[dict]:
     - HighLatencyP99: p99 > 2x SLO threshold for 5m
     """
     service = slo["service"]
+    metric_service = slo.get("metric_service", service)
     alerts: list[dict] = []
 
     synthetic_service_name = SYNTHETIC_SERVICE_NAMES.get(service)
@@ -362,9 +365,15 @@ def standard_alerts(slo: dict) -> list[dict]:
             total_metric, total_labels = split_spec(slo_def["sli"]["total_spec"])
             err_selector = merge_labels(
                 total_labels,
-                {"status": '~"5.."', "service_name": f'"{service}"'},
+                {
+                    "http_response_status_code": '~"5.."',
+                    "service_name": f'"{metric_service}"',
+                },
             )
-            ok_selector = merge_labels(total_labels, {"service_name": f'"{service}"'})
+            ok_selector = merge_labels(
+                total_labels,
+                {"service_name": f'"{metric_service}"'},
+            )
             expr = (
                 f"(\n"
                 f"  sum(rate({total_metric}{err_selector}[5m]))\n"
@@ -392,7 +401,13 @@ def standard_alerts(slo: dict) -> list[dict]:
             warnings = 2.0 * threshold_value
             critical = 4.0 * threshold_value
             bucket_metric, bucket_labels = split_spec(slo_def["sli"]["spec"])
-            bucket_selector = merge_labels(bucket_labels, {"service_name": f'"{service}"'})
+            quantile_labels = {
+                key: value for key, value in bucket_labels.items() if key != "le"
+            }
+            bucket_selector = merge_labels(
+                quantile_labels,
+                {"service_name": f'"{metric_service}"'},
+            )
             alerts.append({
                 "alert": "HighLatencyP99",
                 "expr": (
