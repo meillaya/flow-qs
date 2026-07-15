@@ -167,7 +167,10 @@ class HTTPXUpstreamContext:
         """Query Loki by Tempo trace IDs, falling back to OTLP service labels."""
         url = f"{self.loki_url}/loki/api/v1/query_range"
         valid_trace_ids = [
-            trace_id for trace_id in trace_ids or [] if re.fullmatch(r"[a-fA-F0-9]{16,64}", trace_id)
+            trace_id
+            for trace_id in trace_ids or []
+            if re.fullmatch(r"[a-fA-F0-9]{16,32}", trace_id)
+            and int(trace_id, 16) != 0
         ]
         if valid_trace_ids:
             trace_pattern = "|".join(re.escape(trace_id) for trace_id in valid_trace_ids)
@@ -190,19 +193,47 @@ class HTTPXUpstreamContext:
             logger.warning("loki fetch failed: %s", exc)
             return []
 
+        if not isinstance(data, dict):
+            logger.warning("loki fetch failed: response is not an object")
+            return []
+        payload = data.get("data")
+        if not isinstance(payload, dict):
+            logger.warning("loki fetch failed: data is not an object")
+            return []
+        streams = payload.get("result") or []
+        if not isinstance(streams, list):
+            logger.warning("loki fetch failed: result is not an array")
+            return []
+
         hits: list[LogHit] = []
-        streams = (data.get("data") or {}).get("result") or []
         for stream in streams:
-            labels = stream.get("stream") or {}
-            for entry in stream.get("values") or []:
-                if len(entry) < 2:
+            if not isinstance(stream, dict):
+                continue
+            raw_labels = stream.get("stream") or {}
+            values = stream.get("values") or []
+            if not isinstance(raw_labels, dict) or not isinstance(values, list):
+                continue
+            labels = {
+                key: value
+                for key, value in raw_labels.items()
+                if isinstance(key, str) and isinstance(value, str)
+            }
+            for entry in values:
+                if not isinstance(entry, list) or len(entry) < 2:
                     continue
                 ts_ns, line = entry[0], entry[1]
+                if not isinstance(line, str):
+                    continue
                 try:
-                    ts_iso = datetime.fromtimestamp(int(ts_ns) / 1_000_000_000, tz=UTC).isoformat()
-                except (TypeError, ValueError):
-                    ts_iso = ""
-                hits.append(LogHit(timestamp=ts_iso, line=str(line), labels=dict(labels)))
+                    timestamp_ns = int(ts_ns)
+                    if timestamp_ns < 0:
+                        continue
+                    ts_iso = datetime.fromtimestamp(
+                        timestamp_ns / 1_000_000_000, tz=UTC
+                    ).isoformat()
+                except (OSError, OverflowError, TypeError, ValueError):
+                    continue
+                hits.append(LogHit(timestamp=ts_iso, line=line, labels=labels))
                 if len(hits) >= limit:
                     return hits
         return hits

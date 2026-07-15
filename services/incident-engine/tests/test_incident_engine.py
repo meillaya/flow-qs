@@ -501,6 +501,29 @@ async def test_firing_webhook_ignores_alertmanager_zero_ends_at(
     assert "0001-01-01" not in detail["postmortem"]
 
 
+def test_resolved_webhook_without_end_time_uses_receipt_time(
+    temp_paths, static_context
+) -> None:
+    """A resolved delivery without ``endsAt`` still records a consistent resolution."""
+    alert = _make_alert("ResolvedWithoutEnd", "cart-service").model_copy(
+        update={"status": "resolved", "endsAt": None}
+    )
+    app = create_app(context=static_context)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhook",
+            json=AlertmanagerPayload(status="resolved", alerts=[alert]).model_dump(),
+        )
+        incident_id = response.json()["incidents"][0]
+        detail = client.get(f"/incidents/{incident_id}").json()
+
+    assert detail["status"] == "resolved"
+    assert detail["ends_at"] is not None
+    assert "still being tracked" not in detail["summary"]
+    assert any("resolved" in event["message"] for event in detail["timeline"])
+
+
 def test_resolved_incident_ignores_stale_firing_retry(temp_paths, static_context) -> None:
     """An out-of-order firing retry cannot reopen or contaminate a resolved incident."""
     reset_chaos_state()

@@ -355,9 +355,12 @@ async def _process_alert_serialized(
     payload_status: str,
 ) -> tuple[IncidentRecord, list[TimelineEvent], str]:
     alertname, service, severity, slo, starts_at, ends_at, fingerprint = _parse_alert(alert)
+    received_at = datetime.now(UTC)
     is_resolved = payload_status == "resolved" or alert.status == "resolved"
     if not is_resolved:
         ends_at = None
+    elif ends_at is None:
+        ends_at = received_at
 
     incident_id = uuid.uuid5(
         uuid.NAMESPACE_OID,
@@ -373,7 +376,7 @@ async def _process_alert_serialized(
         if ends_at is None or ends_at < previous_ends_at:
             ends_at = previous_ends_at
 
-    now = datetime.now(UTC)
+    now = received_at
     lookback_end = min(ends_at or now, now)
     earliest_start = lookback_end - CORRELATION_HORIZON
     correlation_starts_at = min(max(starts_at, earliest_start), lookback_end)
@@ -421,7 +424,7 @@ async def _process_alert_serialized(
 
     record_status = "resolved" if is_resolved else "firing"
 
-    now = datetime.now(UTC).isoformat()
+    now = received_at.isoformat()
     if existing is not None:
         # Update mutable fields only; preserve created_at.
         existing.status = record_status

@@ -118,6 +118,22 @@ async def test_non_object_tempo_payload_degrades_to_empty_context() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [[], {"data": {"result": [42]}}])
+async def test_malformed_loki_schema_degrades_to_empty_context(payload: Any) -> None:
+    """Valid JSON with an invalid Loki schema cannot fail incident ingestion."""
+    now = datetime.now(UTC)
+    async with httpx.AsyncClient() as client:
+        context = HTTPXUpstreamContext(
+            "http://tempo.test", "http://loki.test", "http://prom.test", client=client
+        )
+        with respx.mock as router:
+            router.get("http://loki.test/loki/api/v1/query_range").respond(json=payload)
+            logs = await context.fetch_logs("checkout-service", now, now)
+
+    assert logs == []
+
+
+@pytest.mark.asyncio
 async def test_fetches_checkout_synthetic_prometheus_value_without_invalid_escape() -> None:
     start = datetime(2026, 7, 11, 6, 0, tzinfo=UTC)
     end = datetime(2026, 7, 11, 6, 5, tzinfo=UTC)

@@ -61,7 +61,7 @@ uv run pytest
 ```
 
 The default `pyproject.toml` configures pytest to fail under 80% coverage; the
-current suite contains 47 focused incident, context, lifecycle, and security tests.
+current suite contains 50 focused incident, context, lifecycle, and security tests.
 The upstream API calls are mocked with `respx` and `StaticUpstreamContext`.
 
 ## Build and push
