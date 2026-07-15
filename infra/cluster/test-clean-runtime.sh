@@ -34,15 +34,17 @@ case "$1 $2" in
     true
     ;;
   'cluster delete')
+    cluster_id=$(cut -d'|' -f1 "$MOCK_WORLD/cluster-containers")
     rm -f "$MOCK_WORLD/cluster-present" "$MOCK_WORLD/cluster-containers"
-    sed -i 's/|c1|/||/' "$MOCK_WORLD/volumes"
-    grep -Fxv c1 "$MOCK_WORLD/network-endpoints" >"$MOCK_WORLD/network-endpoints.next" || true
+    sed -i "s/|$cluster_id|/||/" "$MOCK_WORLD/volumes"
+    grep -Fxv "$cluster_id" "$MOCK_WORLD/network-endpoints" >"$MOCK_WORLD/network-endpoints.next" || true
     mv "$MOCK_WORLD/network-endpoints.next" "$MOCK_WORLD/network-endpoints"
     ;;
   'registry delete')
+    registry_id=$(cut -d'|' -f1 "$MOCK_WORLD/registry-container")
     rm -f "$MOCK_WORLD/registry-present" "$MOCK_WORLD/registry-container"
-    sed -i 's/|r1|/||/' "$MOCK_WORLD/volumes"
-    grep -Fxv r1 "$MOCK_WORLD/network-endpoints" >"$MOCK_WORLD/network-endpoints.next" || true
+    sed -i "s/|$registry_id|/||/" "$MOCK_WORLD/volumes"
+    grep -Fxv "$registry_id" "$MOCK_WORLD/network-endpoints" >"$MOCK_WORLD/network-endpoints.next" || true
     mv "$MOCK_WORLD/network-endpoints.next" "$MOCK_WORLD/network-endpoints"
     ;;
   *) exit 2 ;;
@@ -113,14 +115,22 @@ case "$cmd" in
   ps)
     filter=${*: -1}
     case "$filter" in
-      label=k3d.cluster=*) [[ ! -s "$MOCK_WORLD/cluster-containers" ]] || cut -d'|' -f1 "$MOCK_WORLD/cluster-containers" ;;
-      name=*) [[ ! -s "$MOCK_WORLD/registry-container" ]] || cut -d'|' -f1 "$MOCK_WORLD/registry-container" ;;
+      label=k3d.cluster=*) source="$MOCK_WORLD/cluster-containers" ;;
+      name=*) source="$MOCK_WORLD/registry-container" ;;
       volume=*)
         volume=${filter#volume=}
         awk -F'|' -v v="$volume" '$1==v && $2!="" {print $2}' "$MOCK_WORLD/volumes"
+        exit
         ;;
       *) exit 2 ;;
     esac
+    if [[ -s $source ]]; then
+      if [[ ${MOCK_ABBREVIATE_IDS:-0} == 1 && " $* " != *' --no-trunc '* ]]; then
+        cut -d'|' -f1 "$source" | cut -c1-12
+      else
+        cut -d'|' -f1 "$source"
+      fi
+    fi
     ;;
   inspect)
     format=$2; id=$3
@@ -167,6 +177,18 @@ seed_owned_runtime() {
   printf 'c1\nr1\n' >"$case_dir/world/network-endpoints"
 }
 
+seed_owned_runtime_with_full_ids() {
+  local case_dir=$1
+  local cluster_id=035d47885ea7f2a408785a5d72573598906dfc0015e6c22af2d6389bbc8090dd
+  local registry_id=e754d5409acffd0dafce71ec8f1a0b1918c06b90451963900f093ef6a858250d
+  touch "$case_dir/world/cluster-present" "$case_dir/world/registry-present" "$case_dir/world/network-present"
+  printf 'k3d\n' >"$case_dir/world/network-label"
+  printf '%s|k3d-observability-platform-server-0|observability-platform\n' "$cluster_id" >"$case_dir/world/cluster-containers"
+  printf '%s|k3d-observability-registry|registry\n' "$registry_id" >"$case_dir/world/registry-container"
+  printf 'vol-cluster|%s|observability-platform\nvol-registry|%s|\n' "$cluster_id" "$registry_id" >"$case_dir/world/volumes"
+  printf '%s\n%s\n' "$cluster_id" "$registry_id" >"$case_dir/world/network-endpoints"
+}
+
 run_case() {
   local case_dir=$1 expected=$2 destroy_status=${3:-0}
   set +e
@@ -206,6 +228,8 @@ main() {
 
   case_dir="$suite/stopped"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; touch "$case_dir/home/.kube/config-observability"; printf 'null_resource.k3d_cluster\nnull_resource.k3d_registry\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0; ! grep -q 'helm-uninstall-all\| destroy ' "$case_dir/log" || fail 'stopped path used graceful mutators'; grep -q 'cluster delete observability-platform' "$case_dir/log" || fail 'stopped cluster not deleted'; grep -q 'registry delete k3d-observability-registry' "$case_dir/log" || fail 'stopped registry not deleted'
 
+  case_dir="$suite/full-container-ids"; make_fakes "$case_dir"; seed_owned_runtime_with_full_ids "$case_dir"; MOCK_ABBREVIATE_IDS=1 run_case "$case_dir" 0
+
   case_dir="$suite/live-success"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; touch "$case_dir/world/api-live" "$case_dir/home/.kube/config-observability"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; printf 'null_resource.k3d_cluster\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0; grep -q 'make --no-print-directory helm-uninstall-all' "$case_dir/log" || fail 'live path skipped Helm'; grep -q 'terraform .* destroy -auto-approve' "$case_dir/log" || fail 'live path skipped destroy'
 
   case_dir="$suite/live-destroy-fails"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; touch "$case_dir/world/api-live" "$case_dir/home/.kube/config-observability"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; printf 'null_resource.k3d_cluster\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0 42; grep -q 'cluster delete observability-platform' "$case_dir/log" || fail 'destroy-failure fallback skipped cluster'; grep -q 'state rm null_resource.k3d_cluster' "$case_dir/log" || fail 'destroy-failure state not reconciled'
@@ -223,7 +247,7 @@ main() {
   case_dir="$suite/lookalikes"; make_fakes "$case_dir"; touch "$case_dir/world/lookalike-cluster" "$case_dir/world/lookalike-registry"; run_case "$case_dir" 0; assert_no_mutator "$case_dir/log"
 
   if ((failures > 0)); then printf 'cleanup matrix failures: %d\n' "$failures" >&2; return 1; fi
-  printf 'cleanup fake matrix passed: 11 scenarios plus idempotent repeat\n'
+  printf 'cleanup fake matrix passed: 12 scenarios plus idempotent repeat\n'
 }
 
 main "$@"

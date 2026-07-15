@@ -42,7 +42,7 @@ registry_exists=false
 cluster_ids=()
 registry_ids=()
 if $cluster_exists; then
-  mapfile -t cluster_ids < <("$DOCKER_BIN" ps -aq --filter "label=k3d.cluster=$CLUSTER_NAME")
+  mapfile -t cluster_ids < <("$DOCKER_BIN" ps -aq --no-trunc --filter "label=k3d.cluster=$CLUSTER_NAME")
   ((${#cluster_ids[@]} > 0)) || { echo "No Docker containers prove ownership of cluster $CLUSTER_NAME" >&2; exit 1; }
   for id in "${cluster_ids[@]}"; do
     label=$("$DOCKER_BIN" inspect --format '{{ index .Config.Labels "k3d.cluster" }}' "$id")
@@ -50,7 +50,7 @@ if $cluster_exists; then
   done
 fi
 if $registry_exists; then
-  mapfile -t registry_ids < <("$DOCKER_BIN" ps -aq --filter "name=^/${REGISTRY_NAME}$")
+  mapfile -t registry_ids < <("$DOCKER_BIN" ps -aq --no-trunc --filter "name=^/${REGISTRY_NAME}$")
   ((${#registry_ids[@]} == 1)) || { echo "Registry $REGISTRY_NAME did not resolve to one exact container" >&2; exit 1; }
   role=$("$DOCKER_BIN" inspect --format '{{ index .Config.Labels "k3d.role" }}' "${registry_ids[0]}")
   [[ $role == registry ]] || { echo "Registry container has unexpected role: $role" >&2; exit 1; }
@@ -75,7 +75,7 @@ while IFS= read -r volume; do
   while IFS= read -r ref; do
     [[ -n $ref ]] || continue
     is_owned_id "$ref" || { echo "Volume $volume is shared with unrelated container $ref" >&2; exit 1; }
-  done < <("$DOCKER_BIN" ps -aq --filter "volume=$volume")
+  done < <("$DOCKER_BIN" ps -aq --no-trunc --filter "volume=$volume")
 done <"$manifest"
 
 if "$DOCKER_BIN" network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
