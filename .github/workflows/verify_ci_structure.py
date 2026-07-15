@@ -24,7 +24,7 @@ IMAGE_SERVICES = PYTHON_SERVICES | {"payment-gateway"}
 K3D_RESOURCE = re.compile(r'^\s*resource\s+"null_resource"\s+"k3d_cluster"\s*\{')
 NEXT_RESOURCE = re.compile(r"^\s*resource\s+")
 CLUSTER_CREATE = re.compile(
-    r"^\s*\$\{local\.k3d_bin\}\s+cluster\s+create\s+\$\{var\.cluster_name\}\s+\\$"
+    r"^\s*\$\{var\.k3d_bin\}\s+cluster\s+create\s+\$\{var\.cluster_name\}\s+\\$"
 )
 COMMAND_HEREDOC = re.compile(r"^\s*command\s*=\s*<<-?([A-Z][A-Z0-9_]*)\s*$")
 

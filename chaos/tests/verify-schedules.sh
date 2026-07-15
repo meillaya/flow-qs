@@ -16,7 +16,7 @@ yq -e '.kind == "Schedule" and .spec.schedule == "@every 60s" and .spec.historyL
 yq -e '.kind == "Schedule" and .spec.schedule == "@every 60s" and .spec.historyLimit == 5 and .spec.concurrencyPolicy == "Forbid" and .spec.type == "DNSChaos" and .spec.dnsChaos.action == "random" and .spec.dnsChaos.mode == "all" and .spec.dnsChaos.duration == "2m" and .spec.dnsChaos.selector.namespaces == ["ecom"] and .spec.dnsChaos.selector.labelSelectors["app.kubernetes.io/name"] == "inventory-service" and .spec.dnsChaos.patterns == ["inventory-service.ecom.svc.cluster.local","*.inventory-service.ecom.svc.cluster.local"]' "${dns}" >/dev/null
 yq -e '.kind == "Workflow" and .spec.entry == "scheduled-pod-kill" and .spec.templates[0].templateType == "Schedule" and .spec.templates[0].deadline == "5m" and .spec.templates[0].schedule.schedule == "@every 60s" and .spec.templates[0].schedule.historyLimit == 5 and .spec.templates[0].schedule.concurrencyPolicy == "Forbid" and .spec.templates[0].schedule.type == "PodChaos" and .spec.templates[0].schedule.podChaos.action == "pod-kill" and .spec.templates[0].schedule.podChaos.mode == "one" and .spec.templates[0].schedule.podChaos.selector.namespaces == ["ecom"] and .spec.templates[0].schedule.podChaos.selector.labelSelectors["app.kubernetes.io/name"] == "checkout-service"' "${pod}" >/dev/null
 
-helm show crds chaos-mesh/chaos-mesh --version 2.7.0 >"${TMP}/crds.yaml"
+helm show crds chaos-mesh/chaos-mesh --version 2.8.3 >"${TMP}/crds.yaml"
 for kind in Schedule Workflow; do
   lower="${kind,,}"
   yq "select(.kind == \"CustomResourceDefinition\" and .spec.names.kind == \"${kind}\") | .spec.versions[] | select(.name == \"v1alpha1\") | .schema.openAPIV3Schema" \

@@ -16,7 +16,9 @@ A minimal umbrella chart used as a base for all Enten v2 services. It provides:
 Render the chart locally:
 
 ```bash
-helm template my-svc charts/svc-template -f my-values.yaml
+helm template my-svc charts/svc-template \
+  --set-string image.repository=ghcr.io/enten/catalog-service \
+  --set-string image.tag="git-$(git rev-parse --verify HEAD)"
 ```
 
 Example `my-values.yaml`:
@@ -25,13 +27,18 @@ Example `my-values.yaml`:
 serviceName: catalog-service
 image:
   repository: ghcr.io/enten/catalog-service
-  tag: latest
 service:
   port: 8000
   targetPort: 8000
 env:
   LOG_LEVEL: info
 ```
+
+Image tags are deployment inputs rather than floating chart defaults. The root
+`Makefile` builds `git-<full-commit-SHA>` images and injects the same tag into
+each release. Direct charts use `image.tag`; charts wrapping `svc-template` use
+`svc-template.image.tag`. Commit service changes before building so a tag never
+refers to different source contents.
 
 ### Linting
 

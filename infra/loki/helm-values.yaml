@@ -41,13 +41,20 @@ loki:
     reject_old_samples: true
     reject_old_samples_max_age: 168h
 
-  structuredConfig:
-    storage_config:
-      tsdb_shipper:
-        active_index_directory: /loki/tsdb-index
-        cache_location: /loki/tsdb-cache
-      filesystem:
-        directory: /loki/chunks
+  storage_config:
+    tsdb_shipper:
+      active_index_directory: /loki/tsdb-index
+      cache_location: /loki/tsdb-cache
+    filesystem:
+      directory: /loki/chunks
+
+  compactor:
+    working_directory: /loki/compactor
+    compaction_interval: 10m
+    retention_enabled: true
+    retention_delete_delay: 2h
+    retention_delete_worker_count: 10
+    delete_request_store: filesystem
 
 singleBinary:
   replicas: 1

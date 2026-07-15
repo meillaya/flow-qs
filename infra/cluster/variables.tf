@@ -5,9 +5,21 @@ variable "cluster_name" {
 }
 
 variable "k3s_image" {
-  description = "Pinned k3s image tag (Kubernetes v1.29.x)"
+  description = "Pinned k3s image tag"
   type        = string
-  default     = "rancher/k3s:v1.29.10-k3s1"
+  default     = "rancher/k3s:v1.35.6-k3s1"
+}
+
+variable "k3d_bin" {
+  description = "k3d executable resolved from PATH by default"
+  type        = string
+  default     = "k3d"
+}
+
+variable "k3d_version" {
+  description = "Exact k3d CLI version required by this stack"
+  type        = string
+  default     = "v5.9.0"
 }
 
 variable "servers" {
@@ -44,14 +56,6 @@ variable "registry_port" {
   description = "Port on which the registry listens inside the cluster network"
   type        = number
   default     = 5000
-}
-
-variable "host_ports" {
-  description = "Host-to-loadbalancer port mappings"
-  type = list(object({
-    host      = number
-    container = number
-  }))
 }
 
 variable "namespaces" {
