@@ -278,6 +278,12 @@ class CheckoutOrchestrator:
                     f"order create failed: {exc}",
                     http_status=503,
                 ) from exc
+            if order.status != "paid":
+                raise CheckoutError(
+                    "order_not_paid",
+                    "order service did not persist a paid order",
+                    http_status=503,
+                )
             return order
 
     # -- compensations ------------------------------------------------------

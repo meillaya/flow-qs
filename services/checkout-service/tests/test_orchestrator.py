@@ -4,6 +4,7 @@ Each test wires a fresh orchestrator to a controllable set of fakes so we can
 assert on the saga bookkeeping (reservations, payments, refunds) and the
 returned outcome.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -137,6 +138,26 @@ async def test_order_creation_failure_releases_inventory_and_refunds_payment(
     assert len(fake_inventory.released) == 1
     assert len(fake_payment.refunds) == 1
     assert fake_payment.refunds[0] == fake_payment.charges[0].charge_id
+
+
+async def test_pending_order_releases_inventory_and_refunds_payment(
+    make_orchestrator: Any,
+    fake_cart: Any,
+    fake_inventory: Any,
+    fake_payment: Any,
+    fake_order: Any,
+) -> None:
+    fake_cart.set_cart("eve", [{"sku": "SKU-001", "qty": 1, "unit_cents": 700}])
+    fake_order.status = "pending"
+    orchestrator: CheckoutOrchestrator = make_orchestrator()
+
+    with pytest.raises(CheckoutError) as captured:
+        await orchestrator.checkout(_req("eve"))
+
+    assert captured.value.code == "order_not_paid"
+    assert captured.value.http_status == 503
+    assert len(fake_inventory.released) == 1
+    assert fake_payment.refunds == [fake_payment.charges[0].charge_id]
 
 
 async def test_empty_cart_short_circuits(

@@ -4,7 +4,7 @@ import os
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import grpc
@@ -18,6 +18,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 
+from app.models import OrderCreateRequest
 from app.payment_client import get_payment_status
 
 logger = logging.getLogger(__name__)
@@ -140,13 +141,22 @@ def get_order(order_id: str, user_id: Annotated[str | None, Query()] = None) -> 
 
 
 @app.post("/orders", status_code=201)
-def create_order(payload: dict) -> dict:
+def create_order(payload: OrderCreateRequest) -> dict:
     order_id = str(uuid.uuid4())
-    user_id = payload.get("user_id")
-    items = payload.get("items", [])
-    total_cents = payload.get("total_cents", 0)
     status = "pending"
-    created_at = datetime.now(timezone.utc).isoformat()
+    if payload.payment_charge_id is not None:
+        try:
+            payment_status = get_payment_status(payload.payment_charge_id)
+        except grpc.RpcError as exc:
+            raise HTTPException(
+                status_code=503, detail="payment status unavailable"
+            ) from exc
+        if payment_status != "approved":
+            raise HTTPException(status_code=409, detail="payment is not approved")
+        status = "paid"
+
+    items = [item.model_dump() for item in payload.items]
+    created_at = datetime.now(UTC).isoformat()
 
     with _get_db() as conn:
         conn.execute(
@@ -154,23 +164,22 @@ def create_order(payload: dict) -> dict:
             INSERT INTO orders (id, user_id, items, total_cents, status, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (order_id, user_id, json.dumps(items), total_cents, status, created_at),
+            (
+                order_id,
+                payload.user_id,
+                json.dumps(items),
+                payload.total_cents,
+                status,
+                created_at,
+            ),
         )
         conn.commit()
 
-    charge_id = payload.get("payment_charge_id")
-    if isinstance(charge_id, str) and charge_id:
-        try:
-            payment_status = get_payment_status(charge_id)
-            logger.info("Payment status for charge %s: %s", charge_id, payment_status)
-        except grpc.RpcError as exc:
-            logger.warning("Could not query payment status: %s", exc)
-
     return {
         "id": order_id,
-        "user_id": user_id,
+        "user_id": payload.user_id,
         "items": items,
-        "total_cents": total_cents,
+        "total_cents": payload.total_cents,
         "status": status,
         "created_at": created_at,
     }
