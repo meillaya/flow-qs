@@ -1,8 +1,8 @@
 # flow-qs: Distributed Observability Platform
 
-[![Lint](https://github.com/Meillaya/enten-v2/actions/workflows/lint.yaml/badge.svg?branch=main)](https://github.com/Meillaya/enten-v2/actions/workflows/lint.yaml)
-[![Test](https://github.com/Meillaya/enten-v2/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/Meillaya/enten-v2/actions/workflows/test.yaml)
-[![Build Images](https://github.com/Meillaya/enten-v2/actions/workflows/build-images.yaml/badge.svg?branch=main)](https://github.com/Meillaya/enten-v2/actions/workflows/build-images.yaml)
+[![Lint](https://github.com/Meillaya/flow-qs/actions/workflows/lint.yaml/badge.svg?branch=main)](https://github.com/Meillaya/flow-qs/actions/workflows/lint.yaml)
+[![Test](https://github.com/Meillaya/flow-qs/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/Meillaya/flow-qs/actions/workflows/test.yaml)
+[![Build Images](https://github.com/Meillaya/flow-qs/actions/workflows/build-images.yaml/badge.svg?branch=main)](https://github.com/Meillaya/flow-qs/actions/workflows/build-images.yaml)
 
 A Kubernetes-deployed observability and incident-response platform built around a small polyglot e-commerce app. Every service is instrumented with OpenTelemetry; an OTLP Collector fans traces to Tempo, logs to Loki, and metrics to Prometheus. Grafana ties the three signals together, Prometheus multi-window burn-rate alerts flow through Alertmanager to a tiny incident engine, and that engine assembles a timeline and writes a Markdown postmortem.
 
