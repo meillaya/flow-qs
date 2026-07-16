@@ -1,6 +1,6 @@
 # Documentation Index
 
-This directory contains the human-facing documentation for the Enten v2 observability platform.
+This directory contains the human-facing documentation for the flow-qs observability platform.
 
 ## Guides
 

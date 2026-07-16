@@ -1,7 +1,7 @@
 {{/*
 Common helpers for the checkout-service chart. Reuses the umbrella chart
 template names so the chart plays nicely with `helm template` from the
-top-level `observability-platform` umbrella.
+top-level flow-qs umbrella.
 */}}
 
 {{- define "observability-platform.name" -}}
@@ -24,7 +24,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/component: orchestrator
-app.kubernetes.io/part-of: enten-v2
+app.kubernetes.io/part-of: flow-qs
 {{- end -}}
 
 {{- define "observability-platform.selectorLabels" -}}

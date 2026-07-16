@@ -1,10 +1,10 @@
-# Enten v2 Helm Charts
+# flow-qs Helm Charts
 
 This directory contains reusable Helm charts for the observability platform.
 
 ## `svc-template`
 
-A minimal umbrella chart used as a base for all Enten v2 services. It provides:
+A minimal umbrella chart used as a base for all flow-qs services. It provides:
 
 - A `Deployment` with standard Kubernetes labels, resource limits, liveness/readiness probes, and OpenTelemetry environment variables.
 - A `ClusterIP` `Service`.
@@ -17,7 +17,7 @@ Render the chart locally:
 
 ```bash
 helm template my-svc charts/svc-template \
-  --set-string image.repository=ghcr.io/enten/catalog-service \
+  --set-string image.repository=ghcr.io/flow-qs/catalog-service \
   --set-string image.tag="git-$(git rev-parse --verify HEAD)"
 ```
 
@@ -26,7 +26,7 @@ Example `my-values.yaml`:
 ```yaml
 serviceName: catalog-service
 image:
-  repository: ghcr.io/enten/catalog-service
+  repository: ghcr.io/flow-qs/catalog-service
 service:
   port: 8000
   targetPort: 8000

@@ -29,7 +29,7 @@ kubeconform -strict \
 
 cat >"${TMP}/measurement-boundary.json" <<'JSON'
 {
-  "schema": "enten.networkchaos.measurement/v1",
+  "schema": "flow-qs.networkchaos.measurement/v1",
   "experiment": "network-delay-payment",
   "samples": {
     "baseline": [

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: svc-template
-description: Reusable umbrella Helm chart for Enten v2 services with OTel instrumentation
+description: Reusable umbrella Helm chart for flow-qs services with OTel instrumentation
 version: 0.1.0
 appVersion: "0.1.0"
 type: application

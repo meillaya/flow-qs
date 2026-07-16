@@ -1,6 +1,6 @@
 # catalog-service
 
-Catalog service for the Enten v2 observability platform.
+Catalog service for the flow-qs observability platform.
 
 Built with **Python 3.12**, **FastAPI**, **SQLite** (stdlib `sqlite3`), and **OpenTelemetry** auto-instrumentation.
 

@@ -176,9 +176,9 @@ seed_owned_runtime() {
   local case_dir=$1
   touch "$case_dir/world/cluster-present" "$case_dir/world/registry-present" "$case_dir/world/network-present"
   printf 'k3d\n' >"$case_dir/world/network-label"
-  printf 'c1|k3d-observability-platform-server-0|observability-platform\n' >"$case_dir/world/cluster-containers"
+  printf 'c1|k3d-flow-qs-server-0|flow-qs\n' >"$case_dir/world/cluster-containers"
   printf 'r1|k3d-observability-registry|registry\n' >"$case_dir/world/registry-container"
-  printf 'vol-cluster|c1|observability-platform\nvol-registry|r1|\n' >"$case_dir/world/volumes"
+  printf 'vol-cluster|c1|flow-qs\nvol-registry|r1|\n' >"$case_dir/world/volumes"
   printf 'c1\nr1\n' >"$case_dir/world/network-endpoints"
 }
 
@@ -188,9 +188,9 @@ seed_owned_runtime_with_full_ids() {
   local registry_id=e754d5409acffd0dafce71ec8f1a0b1918c06b90451963900f093ef6a858250d
   touch "$case_dir/world/cluster-present" "$case_dir/world/registry-present" "$case_dir/world/network-present"
   printf 'k3d\n' >"$case_dir/world/network-label"
-  printf '%s|k3d-observability-platform-server-0|observability-platform\n' "$cluster_id" >"$case_dir/world/cluster-containers"
+  printf '%s|k3d-flow-qs-server-0|flow-qs\n' "$cluster_id" >"$case_dir/world/cluster-containers"
   printf '%s|k3d-observability-registry|registry\n' "$registry_id" >"$case_dir/world/registry-container"
-  printf 'vol-cluster|%s|observability-platform\nvol-registry|%s|\n' "$cluster_id" "$registry_id" >"$case_dir/world/volumes"
+  printf 'vol-cluster|%s|flow-qs\nvol-registry|%s|\n' "$cluster_id" "$registry_id" >"$case_dir/world/volumes"
   printf '%s\n%s\n' "$cluster_id" "$registry_id" >"$case_dir/world/network-endpoints"
 }
 
@@ -199,7 +199,7 @@ run_case() {
   local kubeconfig=${4:-"$case_dir/home/.kube/config-observability"}
   set +e
   HOME="$case_dir/home" TF_DIR="$case_dir/tf" \
-    CLUSTER_NAME=observability-platform REGISTRY_NAME=k3d-observability-registry \
+    CLUSTER_NAME=flow-qs REGISTRY_NAME=k3d-observability-registry \
     KUBECONFIG="$kubeconfig" \
     K3D_BIN="$case_dir/bin/k3d" DOCKER_BIN="$case_dir/bin/docker" \
     KUBECTL_BIN="$case_dir/bin/kubectl" TERRAFORM_BIN="$case_dir/bin/terraform" \
@@ -224,7 +224,7 @@ main() {
     printf 'FAIL: cleanup helper is missing: %s\n' "$helper" >&2
     return 1
   fi
-  suite=$(mktemp -d "${TMPDIR:-/tmp}/enten-clean-runtime-test.XXXXXX")
+  suite=$(mktemp -d "${TMPDIR:-/tmp}/flow-qs-clean-runtime-test.XXXXXX")
   trap 'rm -rf -- "${suite:-}"' EXIT
 
   local case_dir
@@ -233,13 +233,13 @@ main() {
 
   case_dir="$suite/stale-state"; make_fakes "$case_dir"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; touch "$case_dir/home/.kube/config-observability"; printf 'null_resource.k3d_cluster\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0; grep -q 'state rm null_resource.k3d_cluster' "$case_dir/log" || fail 'stale state was not reconciled'
 
-  case_dir="$suite/stopped"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; touch "$case_dir/home/.kube/config-observability"; printf 'null_resource.k3d_cluster\nnull_resource.k3d_registry\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0; ! grep -q 'helm-uninstall-all\| destroy ' "$case_dir/log" || fail 'stopped path used graceful mutators'; grep -q 'cluster delete observability-platform' "$case_dir/log" || fail 'stopped cluster not deleted'; grep -q 'registry delete k3d-observability-registry' "$case_dir/log" || fail 'stopped registry not deleted'
+  case_dir="$suite/stopped"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; touch "$case_dir/home/.kube/config-observability"; printf 'null_resource.k3d_cluster\nnull_resource.k3d_registry\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0; ! grep -q 'helm-uninstall-all\| destroy ' "$case_dir/log" || fail 'stopped path used graceful mutators'; grep -q 'cluster delete flow-qs' "$case_dir/log" || fail 'stopped cluster not deleted'; grep -q 'registry delete k3d-observability-registry' "$case_dir/log" || fail 'stopped registry not deleted'
 
   case_dir="$suite/full-container-ids"; make_fakes "$case_dir"; seed_owned_runtime_with_full_ids "$case_dir"; MOCK_ABBREVIATE_IDS=1 run_case "$case_dir" 0
 
   case_dir="$suite/live-success"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; touch "$case_dir/world/api-live" "$case_dir/home/.kube/config-observability"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; printf 'null_resource.k3d_cluster\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0; grep -q 'make --no-print-directory helm-uninstall-all' "$case_dir/log" || fail 'live path skipped Helm'; grep -q 'terraform .* destroy -auto-approve' "$case_dir/log" || fail 'live path skipped destroy'
 
-  case_dir="$suite/live-destroy-fails"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; touch "$case_dir/world/api-live" "$case_dir/home/.kube/config-observability"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; printf 'null_resource.k3d_cluster\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0 42; grep -q 'cluster delete observability-platform' "$case_dir/log" || fail 'destroy-failure fallback skipped cluster'; grep -q 'state rm null_resource.k3d_cluster' "$case_dir/log" || fail 'destroy-failure state not reconciled'
+  case_dir="$suite/live-destroy-fails"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; touch "$case_dir/world/api-live" "$case_dir/home/.kube/config-observability"; printf '{}\n' >"$case_dir/tf/terraform.tfstate"; printf 'null_resource.k3d_cluster\n' >"$case_dir/tf/state-addresses"; run_case "$case_dir" 0 42; grep -q 'cluster delete flow-qs' "$case_dir/log" || fail 'destroy-failure fallback skipped cluster'; grep -q 'state rm null_resource.k3d_cluster' "$case_dir/log" || fail 'destroy-failure state not reconciled'
 
   case_dir="$suite/no-state"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; touch "$case_dir/world/api-live" "$case_dir/home/.kube/config-observability"; run_case "$case_dir" 0; ! grep -q '^terraform ' "$case_dir/log" || fail 'no-state path invoked Terraform'
 
@@ -247,7 +247,7 @@ main() {
 
   case_dir="$suite/foreign-kubeconfig"; make_fakes "$case_dir"; printf 'foreign\n' >"$case_dir/home/.kube/config"; run_case "$case_dir" 1 0 "$case_dir/home/.kube/config"; test -f "$case_dir/home/.kube/config" || fail 'foreign kubeconfig was deleted'; assert_no_mutator "$case_dir/log"
 
-  case_dir="$suite/secondary-kubeconfig"; make_fakes "$case_dir"; printf 'foreign\n' >"$case_dir/home/.config/kubeconfig-observability-platform.yaml"; run_case "$case_dir" 0; test -f "$case_dir/home/.config/kubeconfig-observability-platform.yaml" || fail 'unowned secondary kubeconfig was deleted'; assert_no_mutator "$case_dir/log"
+  case_dir="$suite/secondary-kubeconfig"; make_fakes "$case_dir"; printf 'foreign\n' >"$case_dir/home/.config/kubeconfig-flow-qs.yaml"; run_case "$case_dir" 0; test -f "$case_dir/home/.config/kubeconfig-flow-qs.yaml" || fail 'unowned secondary kubeconfig was deleted'; assert_no_mutator "$case_dir/log"
 
   case_dir="$suite/missing-tool"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; MOCK_HELM_BIN="$case_dir/bin/missing-helm" run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
 
@@ -255,7 +255,7 @@ main() {
 
   case_dir="$suite/shared-network"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf 'c1\nr1\nforeign\n' >"$case_dir/world/network-endpoints"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
 
-  case_dir="$suite/shared-volume"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf 'vol-cluster|c1|observability-platform\nvol-cluster|foreign|\n' >"$case_dir/world/volumes"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
+  case_dir="$suite/shared-volume"; make_fakes "$case_dir"; seed_owned_runtime "$case_dir"; printf 'vol-cluster|c1|flow-qs\nvol-cluster|foreign|\n' >"$case_dir/world/volumes"; run_case "$case_dir" 1; assert_no_mutator "$case_dir/log"
 
   case_dir="$suite/lookalikes"; make_fakes "$case_dir"; touch "$case_dir/world/lookalike-cluster" "$case_dir/world/lookalike-registry"; run_case "$case_dir" 0; assert_no_mutator "$case_dir/log"
 

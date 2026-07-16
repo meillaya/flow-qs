@@ -84,7 +84,7 @@ function summaryValue(data, metric, value) {
 
 exports.handleSummary = function (data) {
   const payload = {
-    schema: "enten.k6.summary/v1",
+    schema: "flow-qs.k6.summary/v1",
     profile: CHAOS_AWARE ? "demo-chaos" : "standalone-load",
     metrics: {
       checkout_success_rate: summaryValue(
@@ -102,5 +102,5 @@ exports.handleSummary = function (data) {
       iterations: summaryValue(data, "iterations", "count"),
     },
   };
-  return { stdout: `ENTEN_K6_SUMMARY=${JSON.stringify(payload)}\n` };
+  return { stdout: `FLOW_QS_K6_SUMMARY=${JSON.stringify(payload)}\n` };
 };

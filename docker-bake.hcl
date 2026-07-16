@@ -3,7 +3,7 @@ variable "REGISTRY" {
 }
 
 variable "REPOSITORY" {
-  default = "example/enten-v2"
+  default = "example/flow-qs"
 }
 
 variable "SHA" {

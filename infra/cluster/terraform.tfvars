@@ -1,4 +1,4 @@
-cluster_name  = "observability-platform"
+cluster_name  = "flow-qs"
 k3s_image     = "rancher/k3s:v1.35.6-k3s1"
 servers       = 1
 agents        = 2

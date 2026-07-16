@@ -6,6 +6,11 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cd "$root"
 
+grep -Eq '^CLUSTER_NAME[[:space:]]*:= flow-qs$' Makefile
+grep -Eq '^cluster_name[[:space:]]*=[[:space:]]*"flow-qs"$' infra/cluster/terraform.tfvars
+grep -q 'default     = "flow-qs"' infra/cluster/variables.tf
+grep -q '^# flow-qs: Distributed Observability Platform$' README.md
+
 grep -q '^clean: clean-runtime' Makefile
 bash infra/test-platform-contracts.sh
 bash infra/cluster/test-clean-runtime.sh
@@ -14,6 +19,14 @@ sed -n '/resource "null_resource" "k3d_cluster"/,/resource "null_resource" "name
   infra/cluster/main.tf >"$tmp/k3d-cluster"
 grep -q 'umask 077' "$tmp/k3d-cluster"
 grep -q 'chmod 600 .*KUBECONFIG' "$tmp/k3d-cluster"
+
+sed -n '/resource "null_resource" "namespaces"/,/resource "null_resource" "coredns_registry_rewrite"/p' \
+  infra/cluster/main.tf >"$tmp/namespaces"
+grep -q 'cluster_id[[:space:]]*= null_resource.k3d_cluster.id' "$tmp/namespaces"
+
+sed -n '/resource "null_resource" "coredns_registry_rewrite"/,$p' \
+  infra/cluster/main.tf >"$tmp/coredns-registry-rewrite"
+grep -q 'namespaces_id[[:space:]]*= null_resource.namespaces.id' "$tmp/coredns-registry-rewrite"
 
 expected='incident-engine
 cart-service
@@ -48,6 +61,7 @@ done < <(sed -n '/^SERVICES :=/,/^$/s/^    \([^ ]*\).*/\1/p' Makefile | sed 's/[
 grep -q 'prometheus.io/scrape: "true"' "$tmp/payment-gateway"
 grep -q 'prometheus.io/port: "8005"' "$tmp/payment-gateway"
 grep -q 'prometheus.io/path: "/metrics"' "$tmp/payment-gateway"
+grep -q 'app.kubernetes.io/part-of: flow-qs' "$tmp/checkout-service"
 
 sed -n '/^helm-services:/,/^$/p' Makefile >"$tmp/helm-services"
 grep -q -- "--set-string \"\$\$image_key=\$(IMAGE_TAG)\"" "$tmp/helm-services"
@@ -151,6 +165,7 @@ helm template loki grafana/loki \
 helm template grafana grafana/grafana \
   --version 12.7.2 --namespace observability -f infra/grafana/helm-values.yaml >"$tmp/grafana"
 kubectl kustomize infra/grafana >"$tmp/grafana-inputs"
+kubectl kustomize dashboards >"$tmp/dashboards"
 
 test "$(helm show chart grafana/grafana --version 12.7.2 | awk '/^appVersion:/{gsub(/"/, "", $2); print $2}')" = 13.1.0
 test "$(helm show chart grafana/loki --version 18.5.0 | awk '/^appVersion:/{gsub(/"/, "", $2); print $2}')" = 3.7.3
@@ -203,6 +218,7 @@ grep -q 'url: http://tempo.observability:3200' "$tmp/grafana-inputs"
 grep -q 'url: http://loki.observability:3100' "$tmp/grafana-inputs"
 grep -q 'url: http://alertmanager.observability:9093' "$tmp/grafana-inputs"
 grep -q 'implementation: prometheus' "$tmp/grafana-inputs"
+grep -q 'app.kubernetes.io/part-of: flow-qs' "$tmp/dashboards"
 if grep -q 'streamingEnabled:' "$tmp/grafana-inputs"; then
   exit 1
 fi

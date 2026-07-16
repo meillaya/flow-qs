@@ -40,7 +40,7 @@ helm.sh/chart: {{ include "otel-collector.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-app.kubernetes.io/part-of: observability-platform
+app.kubernetes.io/part-of: flow-qs
 app.kubernetes.io/component: collector
 {{- end -}}
 

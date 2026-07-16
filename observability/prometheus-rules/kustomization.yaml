@@ -6,7 +6,7 @@ namespace: observability
 labels:
   - includeSelectors: false
     pairs:
-      app.kubernetes.io/part-of: observability-platform
+      app.kubernetes.io/part-of: flow-qs
       app.kubernetes.io/component: prometheus-rules
 
 configMapGenerator:

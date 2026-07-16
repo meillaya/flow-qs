@@ -53,7 +53,7 @@
   enterShell = ''
     export GOTOOLCHAIN=go1.26.5
     export KUBECONFIG="$HOME/.kube/config-observability"
-    echo "Observability Platform dev shell ready"
+    echo "flow-qs dev shell ready"
     echo "KUBECONFIG: $KUBECONFIG"
     echo "OTEL_EXPORTER_OTLP_ENDPOINT: $OTEL_EXPORTER_OTLP_ENDPOINT"
   '';

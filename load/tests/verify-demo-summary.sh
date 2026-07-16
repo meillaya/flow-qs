@@ -13,7 +13,7 @@ cp "${ROOT}/load/tests/demo-k6-summary.log" "${TMP}/valid.log"
 printf '{"stale":true}\n' >"${TMP}/valid.json"
 write_k6_summary "${TMP}/valid.log" "${TMP}/valid.json"
 jq -e 'has("stale") | not' "${TMP}/valid.json" >/dev/null
-jq -e '.schema == "enten.k6.summary/v1" and .profile == "demo-chaos" and .metrics.checkout_success_rate == 0.9475 and .metrics.http_req_failed == 0.0262 and .metrics.http_req_duration_p95_ms == 55' "${TMP}/valid.json" >/dev/null
+jq -e '.schema == "flow-qs.k6.summary/v1" and .profile == "demo-chaos" and .metrics.checkout_success_rate == 0.9475 and .metrics.http_req_failed == 0.0262 and .metrics.http_req_duration_p95_ms == 55' "${TMP}/valid.json" >/dev/null
 
 cat >"${DRIVER}" <<'JS'
 const target = require("./load.js");
@@ -51,7 +51,7 @@ expect_rejected_without_stale_output() {
 
 printf 'no marker\n' >"${TMP}/missing.log"
 expect_rejected_without_stale_output "${TMP}/missing.log" "${TMP}/missing.json"
-printf 'ENTEN_K6_SUMMARY={bad json}\n' >"${TMP}/malformed.log"
+printf 'FLOW_QS_K6_SUMMARY={bad json}\n' >"${TMP}/malformed.log"
 expect_rejected_without_stale_output "${TMP}/malformed.log" "${TMP}/malformed.json"
 sed 's/"demo-chaos"/"standalone-load"/' "${ROOT}/load/tests/demo-k6-summary.log" >"${TMP}/wrong-profile.log"
 expect_rejected_without_stale_output "${TMP}/wrong-profile.log" "${TMP}/wrong-profile.json"

@@ -1,7 +1,7 @@
 # k6 Load Tests
 
 This directory contains [k6](https://k6.io/) scripts and Kubernetes Job
-manifests for load-testing the observability-platform demo services.
+manifests for load-testing the flow-qs demo services.
 
 All tests run **inside the cluster** in the `load` namespace using
 `grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669`.
@@ -90,7 +90,7 @@ checkout success above 95%. Smoke, stress, and spike remain unchanged.
   masquerade as an infrastructure failure.
 - Standalone Jobs may write raw JSON metrics to `/tmp/results.json` inside the
   pod. The demo Job avoids that sample stream and emits one compact
-  `ENTEN_K6_SUMMARY=` JSON marker through `handleSummary`; the demo persists it
+  `FLOW_QS_K6_SUMMARY=` JSON marker through `handleSummary`; the demo persists it
   from `kubectl logs` after the Job completes.
 - k6 is intentionally **not** executed from the host; all traffic originates
   from within the cluster.

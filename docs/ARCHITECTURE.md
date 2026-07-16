@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the Enten v2 observability platform: the services, how they talk to each other, how telemetry moves through the stack, how alerts become postmortems, and how SLOs and chaos experiments are wired together.
+This document describes the flow-qs observability platform: the services, how they talk to each other, how telemetry moves through the stack, how alerts become postmortems, and how SLOs and chaos experiments are wired together.
 
 ## System Diagram
 

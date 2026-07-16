@@ -19,7 +19,7 @@ spec:
       labels:
         {{- include "otel-collector.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: collector
-        app.kubernetes.io/part-of: observability-platform
+        app.kubernetes.io/part-of: flow-qs
     spec:
       serviceAccountName: {{ include "otel-collector.serviceAccountName" . }}
       terminationGracePeriodSeconds: {{ .Values.pod.terminationGracePeriodSeconds }}

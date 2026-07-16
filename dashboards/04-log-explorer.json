@@ -49,7 +49,7 @@
       "includeVars": false,
       "keepTime": true,
       "tags": [
-        "observability-platform",
+        "flow-qs",
         "red"
       ],
       "targetBlank": false
@@ -114,7 +114,7 @@
   "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
-    "observability-platform",
+    "flow-qs",
     "log"
   ],
   "templating": {

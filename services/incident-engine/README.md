@@ -2,7 +2,7 @@
 
 Alertmanager webhook receiver that correlates traces from **Tempo**, logs from
 **Loki** and metric snapshots from **Prometheus** to produce Markdown
-postmortems for the Enten v2 observability platform.
+postmortems for the flow-qs observability platform.
 
 ## What it does
 

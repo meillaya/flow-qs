@@ -12,7 +12,7 @@ jq -e '
       (.time_total_seconds | type == "number" and . > 0)
     );
   def median: map(.time_total_seconds) | sort | .[1];
-  .schema == "enten.networkchaos.measurement/v1" and
+  .schema == "flow-qs.networkchaos.measurement/v1" and
   .experiment == "network-delay-payment" and
   (.samples.baseline | valid_samples) and
   (.samples.injected | valid_samples) and
@@ -24,7 +24,7 @@ jq -c '
   (.samples.baseline | median) as $baseline |
   (.samples.injected | median) as $injected |
   {
-    schema: "enten.networkchaos.measurement-result/v1",
+    schema: "flow-qs.networkchaos.measurement-result/v1",
     baseline_median_seconds: $baseline,
     injected_median_seconds: $injected,
     delta_seconds: ($injected - $baseline),

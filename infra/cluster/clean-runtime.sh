@@ -24,7 +24,7 @@ for tool in "$K3D_BIN" "$DOCKER_BIN" "$KUBECTL_BIN" "$TERRAFORM_BIN" "$MAKE_BIN"
   command -v "$tool" >/dev/null 2>&1 || { echo "Required cleanup tool is unavailable: $tool" >&2; exit 1; }
 done
 
-manifest=$(mktemp "${TMPDIR:-/tmp}/enten-runtime-owned.XXXXXX")
+manifest=$(mktemp "${TMPDIR:-/tmp}/flow-qs-runtime-owned.XXXXXX")
 trap 'rm -f -- "$manifest"' EXIT
 
 is_allowed_address() {

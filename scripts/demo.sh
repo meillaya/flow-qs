@@ -380,7 +380,7 @@ log_path, output_path = map(Path, sys.argv[1:])
 temporary_path = output_path.with_name(f".{output_path.name}.tmp")
 output_path.unlink(missing_ok=True)
 temporary_path.unlink(missing_ok=True)
-prefix = "ENTEN_K6_SUMMARY="
+prefix = "FLOW_QS_K6_SUMMARY="
 markers = [
     line.removeprefix(prefix)
     for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -392,7 +392,7 @@ try:
     payload = json.loads(markers[0])
 except json.JSONDecodeError as error:
     raise SystemExit(f"invalid k6 summary marker: {error}") from error
-if payload.get("schema") != "enten.k6.summary/v1":
+if payload.get("schema") != "flow-qs.k6.summary/v1":
     raise SystemExit("unexpected k6 summary schema")
 if payload.get("profile") != "demo-chaos":
     raise SystemExit("unexpected k6 summary profile")

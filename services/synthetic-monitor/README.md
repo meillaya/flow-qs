@@ -1,6 +1,6 @@
 # synthetic-monitor
 
-In-cluster synthetic health monitor for the Enten v2 e-commerce services.
+In-cluster synthetic health monitor for the flow-qs e-commerce services.
 
 ## What it does
 

@@ -1,6 +1,6 @@
 # Setup and verification
 
-Enten is a local k3d demo. It does not install Ingress, TLS, public load
+flow-qs is a local k3d demo. It does not install Ingress, TLS, public load
 balancers, production authentication, backups, or highly available storage.
 
 ## Tool and runtime pins

@@ -115,6 +115,7 @@ resource "null_resource" "namespaces" {
   depends_on = [null_resource.k3d_cluster]
 
   triggers = {
+    cluster_id      = null_resource.k3d_cluster.id
     namespaces      = join(",", var.namespaces)
     kubeconfig_path = var.kubeconfig_path
   }
@@ -145,6 +146,7 @@ resource "null_resource" "coredns_registry_rewrite" {
   depends_on = [null_resource.namespaces]
 
   triggers = {
+    namespaces_id   = null_resource.namespaces.id
     registry_host   = local.registry_host
     kubeconfig_path = var.kubeconfig_path
   }

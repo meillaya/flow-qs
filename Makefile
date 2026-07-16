@@ -3,7 +3,7 @@ SHELL              := bash
 .SHELLFLAGS        := -eu -o pipefail -c
 override export KUBECONFIG := $(HOME)/.kube/config-observability
 
-CLUSTER_NAME       := observability-platform
+CLUSTER_NAME       := flow-qs
 REGISTRY_NAME      := k3d-observability-registry
 TF_DIR             := infra/cluster
 OBS_NS             := observability

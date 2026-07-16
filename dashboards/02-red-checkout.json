@@ -663,7 +663,7 @@
   "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
-    "observability-platform",
+    "flow-qs",
     "red",
     "checkout-service"
   ],

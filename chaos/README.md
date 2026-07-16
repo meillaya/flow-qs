@@ -89,7 +89,7 @@ cd chaos && make verify-schedules
 
 Live acceptance must measure the checkout application path, not payment's
 health endpoint. Capture exactly three successful baseline and three injected
-checkout samples in `enten.networkchaos.measurement/v1` JSON, including HTTP
+checkout samples in `flow-qs.networkchaos.measurement/v1` JSON, including HTTP
 status, paid status, 32-character trace ID, and total seconds. Then run:
 
 ```bash

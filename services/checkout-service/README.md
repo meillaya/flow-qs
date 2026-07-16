@@ -1,6 +1,6 @@
 # checkout-service
 
-Saga-style checkout orchestrator for the Enten v2 observability demo.
+Saga-style checkout orchestrator for the flow-qs observability demo.
 
 ## What it does
 

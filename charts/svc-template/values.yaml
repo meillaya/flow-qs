@@ -1,5 +1,5 @@
 # Default values for svc-template.
-# This is a reusable umbrella chart for Enten v2 services.
+# This is a reusable umbrella chart for flow-qs services.
 
 # -- Human-readable service name; used for OTEL_SERVICE_NAME and selectors.
 serviceName: ""

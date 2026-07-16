@@ -4,7 +4,7 @@ metadata:
   name: demo-alert-checkout
   namespace: chaos-testing
   labels:
-    app.kubernetes.io/part-of: observability-platform
+    app.kubernetes.io/part-of: flow-qs
     app.kubernetes.io/component: demo-chaos
     demo.observability/owned: "true"
 spec:

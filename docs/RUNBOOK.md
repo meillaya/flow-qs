@@ -1,6 +1,6 @@
 # Runbook
 
-Operational playbooks for the Enten v2 observability platform.
+Operational playbooks for the flow-qs observability platform.
 
 Commands below that use `127.0.0.1:3000`, `:9090`, or `:9093` assume the
 matching `kubectl port-forward` from [SETUP.md](./SETUP.md) is running. The
@@ -176,7 +176,7 @@ Symptoms: Prometheus pod is in `Evicted` or `CrashLoopBackOff`; disk pressure wa
    make up
    ```
 
-5. Enten does not claim object-storage backup or in-place PVC migration.
+5. flow-qs does not claim object-storage backup or in-place PVC migration.
 
 ## Cookbooks
 
