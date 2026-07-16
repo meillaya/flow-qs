@@ -34,6 +34,9 @@ while IFS=',' read -r release namespace chart image_key; do
   grep -q 'name: OTEL_SEMCONV_STABILITY_OPT_IN' "$tmp/$release"
   grep -A1 'name: OTEL_SEMCONV_STABILITY_OPT_IN' "$tmp/$release" | grep -Eq 'value: "?http"?'
   grep -q 'runAsNonRoot: true' "$tmp/$release"
+  grep -Eq 'runAsUser: [1-9][0-9]*' "$tmp/$release"
+  grep -Eq 'runAsGroup: [1-9][0-9]*' "$tmp/$release"
+  grep -Eq 'fsGroup: [1-9][0-9]*' "$tmp/$release"
   grep -q 'type: RuntimeDefault' "$tmp/$release"
   grep -q 'allowPrivilegeEscalation: false' "$tmp/$release"
   grep -A2 'drop:' "$tmp/$release" | grep -q -- '- ALL'
