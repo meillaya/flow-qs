@@ -6,8 +6,6 @@
 
 A Kubernetes-deployed observability and incident-response platform built around a small polyglot e-commerce app. Every service is instrumented with OpenTelemetry; an OTLP Collector fans traces to Tempo, logs to Loki, and metrics to Prometheus. Grafana ties the three signals together, Prometheus multi-window burn-rate alerts flow through Alertmanager to a tiny incident engine, and that engine assembles a timeline and writes a Markdown postmortem.
 
-**Resume bullet**: Built a Kubernetes-deployed distributed observability platform using OpenTelemetry, Prometheus, Grafana, Loki, and Tempo to collect traces, logs, and metrics, detect SLO violations, run chaos experiments, and generate automated incident reports.
-
 ## Architecture
 
 ```mermaid
@@ -147,16 +145,3 @@ make verify      # validate live telemetry, rules, dashboards, and services
 make down        # remove only this repository's runtime resources
 make clean       # make down + remove Terraform/devenv local state
 ```
-
-## Lessons Learned
-
-- Keep the gateway and node-agent Collector pipelines in Helm values as the single source of truth for what runs in the cluster.
-- Run one node log agent per schedulable node; keep stateful servicegraph processing on the single local-demo gateway.
-- `http_server_request_duration_seconds_{bucket,count,sum}` keyed on `service_name`, `service_namespace`, `http_response_status_code`, and `http_route` is the stable RED contract. Payment reaches it through a bounded Prometheus scrape exception.
-- Provision Grafana dashboards as JSON and Alertmanager config as YAML so the stack is reproducible without click-ops.
-- Multi-window multi-burn-rate alerts cut noise: fast-burn pages catch emergencies, slow-burn warnings catch budget drift.
-- Running k6 as a Kubernetes Job keeps load generation inside the cluster network and avoids host-side port conflicts.
-- An Alertmanager-to-incident-engine webhook is enough for demo-grade automated postmortems; no UI needed.
-- Treat the k6 Job exit, incident correlation, and bounded cleanup as authoritative. The demo fails rather than fabricate a postmortem or weaken thresholds.
-- Deploy immutable run-specific image tags so re-running `make up` rolls new pod templates and leaves a Kubernetes rollback target.
-- Build every service from digest-pinned base/tool images and committed frozen dependency locks.
