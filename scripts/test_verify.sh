@@ -123,7 +123,8 @@ case "${url}" in
         if [[ "${MOCK_FAILURE:-}" == tempo_empty ]]; then
             body='{"batches":[]}'
         else
-            body="{\"batches\":[{\"scopeSpans\":[{\"spans\":[{\"traceId\":\"${trace_id}\"}]}]}]}"
+            trace_id_b64=$(printf '%s' "${trace_id}" | xxd -r -p | base64 | tr -d '\n')
+            body="{\"batches\":[{\"scopeSpans\":[{\"spans\":[{\"traceId\":\"${trace_id_b64}\"}]}]}]}"
         fi
         ;;
     */loki/api/v1/push)
@@ -137,6 +138,19 @@ case "${url}" in
             service_name="${BASH_REMATCH[1]}"
             log_line='log'
             if [[ "${service_name}" == payment-gateway && "${MOCK_FAILURE:-}" != payment_stale ]]; then
+                if [[ "${MOCK_FAILURE:-}" == payment_delayed && "${write_code}" == 0 ]]; then
+                    delay_counter="${MOCK_STATE_DIR}/payment-delay-counter"
+                    delay_count=$(cat "${delay_counter}" 2>/dev/null || printf '0')
+                    printf '%s\n' "$((delay_count + 1))" >"${delay_counter}"
+                    if [[ "${delay_count}" -eq 0 ]]; then
+                        body='{"status":"success","data":{"resultType":"streams","result":[]}}'
+                        if [[ -n "${output_file}" && "${output_file}" != /dev/null ]]; then
+                            printf '%s' "${body}" >"${output_file}"
+                        fi
+                        if ((write_code)); then printf '%s' "${code}"; else printf '%s' "${body}"; fi
+                        exit 0
+                    fi
+                fi
                 log_line='time=now level=INFO msg=http_request path=/__verify_log__ status=404'
             fi
             body="{\"status\":\"success\",\"data\":{\"resultType\":\"streams\",\"result\":[{\"stream\":{\"service_name\":\"${service_name}\"},\"values\":[[\"1\",\"${log_line}\"]]}]}}"
@@ -273,6 +287,7 @@ run_check() {
         MOCK_RULES_INVALID="${invalid_rules}" \
         MOCK_FAILURE="${mock_failure}" \
         MOCK_GRAFANA_BODY="${grafana_body}" \
+        MOCK_STATE_DIR="${TMP_DIR}" \
         MOCK_COLLECTOR_STATE="${collector_state}" \
         MOCK_MISSING_SERVICE="${missing_service}" \
         MOCK_POD_STATE="${pod_state}" \
@@ -409,6 +424,10 @@ assert_contains "${TMP_DIR}/curl-6.log" 'data-urlencode=start=' "Payment log pro
 
 run_check 6 0 payment_stale
 assert_status "${RUN_STATUS}" 1 "Loki rejects a stale payment log without the prime path marker"
+
+rm -f "${TMP_DIR}/payment-delay-counter"
+run_check 6 0 payment_delayed
+assert_status "${RUN_STATUS}" 0 "Loki waits for the fresh payment log to clear the collector batch"
 
 run_check 6 0 loki
 assert_status "${RUN_STATUS}" 1 "Loki check fails closed on an API error payload"

@@ -113,7 +113,7 @@ selected_check() {
 prerequisites() {
     hdr "Prerequisites"
     local ok=1
-    for cmd in kubectl curl jq; do
+    for cmd in kubectl curl jq xxd base64; do
         if command -v "${cmd}" >/dev/null 2>&1; then
             printf '  \033[32mOK\033[0m        %s -> %s\n' "${cmd}" "$(command -v "${cmd}")"
         else
@@ -350,8 +350,9 @@ check_5_otel_trace() {
     track_port_forward "${tempo_pid}"
     sleep 1
 
-    local trace_id
+    local trace_id trace_id_b64
     trace_id=$(printf '%032x' $((RANDOM*RANDOM*RANDOM)) | head -c 32)
+    trace_id_b64=$(printf '%s' "${trace_id}" | xxd -r -p | base64 | tr -d '\n')
     local now_ns=$(( $(date +%s) * 1000000000 ))
     local payload
     payload=$(cat <<EOF
@@ -380,15 +381,26 @@ EOF
 
     local ready_code
     ready_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${tempo_pf}/ready" 2>/dev/null) || ready_code=000
-    sleep 1
     local qcode qbody trace_match
-    qbody=$(curl -sS -m 5 \
-        "http://127.0.0.1:${tempo_pf}/api/traces/${trace_id}" 2>/dev/null) || qbody=''
-    qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' \
-        "http://127.0.0.1:${tempo_pf}/api/traces/${trace_id}" 2>/dev/null) || qcode=000
-    trace_match=$(printf '%s' "${qbody}" | jq -er --arg trace_id "${trace_id}" '
-        [.. | objects | .traceId? // empty] | any(. == $trace_id)
-    ' 2>/dev/null) || trace_match=false
+    local trace_deadline=$((SECONDS + ${VERIFY_TRACE_TIMEOUT_SECONDS:-15}))
+    while :; do
+        qbody=$(curl -sS -m 5 \
+            "http://127.0.0.1:${tempo_pf}/api/traces/${trace_id}" 2>/dev/null) || qbody=''
+        qcode=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' \
+            "http://127.0.0.1:${tempo_pf}/api/traces/${trace_id}" 2>/dev/null) || qcode=000
+        trace_match=$(printf '%s' "${qbody}" | jq -er \
+            --arg trace_id "${trace_id}" --arg trace_id_b64 "${trace_id_b64}" '
+            [.. | objects | .traceId? // empty]
+            | any(. == $trace_id or . == $trace_id_b64)
+        ' 2>/dev/null) || trace_match=false
+        if [[ "${qcode}" =~ ^2[0-9][0-9]$ && "${trace_match}" == true ]]; then
+            break
+        fi
+        if ((SECONDS >= trace_deadline)); then
+            break
+        fi
+        sleep 1
+    done
 
     stop_port_forwards "${otel_pid}" "${tempo_pid}"
 
@@ -428,7 +440,7 @@ check_6_loki_logs() {
     payment_prime_start_ns=$(( $(date +%s) * 1000000000 ))
     payment_prime_code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' \
         "http://127.0.0.1:${payment_pf}/__verify_log__" 2>/dev/null) || payment_prime_code=000
-    sleep "${VERIFY_LOG_SETTLE_SECONDS:-5}"
+    sleep "${VERIFY_LOG_SETTLE_SECONDS:-0}"
 
     local now_ns=$(( $(date +%s) * 1000000000 ))
     local stream_tag="verify-sh-$RANDOM"
@@ -478,35 +490,47 @@ EOF
                 --data-urlencode "end=${product_query_end_ns}"
             )
         fi
-        product_body=$(curl -sS -m 5 -G \
-            --data-urlencode "query=${product_query}" \
-            --data-urlencode "limit=1" \
-            "${product_time_args[@]}" \
-            "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_body=''
-        service_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
-            --data-urlencode "query=${product_query}" \
-            --data-urlencode "limit=1" \
-            "${product_time_args[@]}" \
-            "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || service_code=000
-        read -r service_status service_match < <(
-            printf '%s' "${product_body}" | jq -er \
-                --arg service "${product_service}" \
-                --arg marker "path=/__verify_log__" '
-                if .status == "success" and (.data.result | type) == "array"
-                then [
-                    .status,
-                    any(.data.result[];
-                        .stream.service_name == $service and
-                        (.values | type) == "array" and
-                        (.values | length) > 0 and
-                        ($service != "payment-gateway" or
-                            any(.values[];
-                                (length >= 2) and (.[1] | contains($marker)))))
-                ] | @tsv
-                else error("invalid Loki range result")
-                end
-            ' 2>/dev/null || printf 'invalid\tfalse\n'
-        )
+        local product_deadline=$((SECONDS + ${VERIFY_LOG_TIMEOUT_SECONDS:-15}))
+        while :; do
+            product_body=$(curl -sS -m 5 -G \
+                --data-urlencode "query=${product_query}" \
+                --data-urlencode "limit=1" \
+                "${product_time_args[@]}" \
+                "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || product_body=''
+            service_code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -G \
+                --data-urlencode "query=${product_query}" \
+                --data-urlencode "limit=1" \
+                "${product_time_args[@]}" \
+                "http://127.0.0.1:${loki_pf}/loki/api/v1/query_range" 2>/dev/null) || service_code=000
+            read -r service_status service_match < <(
+                printf '%s' "${product_body}" | jq -er \
+                    --arg service "${product_service}" \
+                    --arg marker "path=/__verify_log__" '
+                    if .status == "success" and (.data.result | type) == "array"
+                    then [
+                        .status,
+                        any(.data.result[];
+                            .stream.service_name == $service and
+                            (.values | type) == "array" and
+                            (.values | length) > 0 and
+                            ($service != "payment-gateway" or
+                                any(.values[];
+                                    (length >= 2) and (.[1] | contains($marker)))))
+                    ] | @tsv
+                    else error("invalid Loki range result")
+                    end
+                ' 2>/dev/null || printf 'invalid\tfalse\n'
+            )
+            if [[ "${service_code}" =~ ^2[0-9][0-9]$ \
+                && "${service_status}" == success \
+                && "${service_match}" == true ]]; then
+                break
+            fi
+            if [[ "${product_service}" != payment-gateway ]] || ((SECONDS >= product_deadline)); then
+                break
+            fi
+            sleep 1
+        done
         if [[ "${service_code}" =~ ^2[0-9][0-9]$ \
             && "${service_status}" == success \
             && "${service_match}" == true ]]; then
@@ -835,7 +859,7 @@ check_11_incident_engine() {
 }
 
 main() {
-    hdr "verify.sh — Enten v2 end-to-end health check"
+    hdr "verify.sh — flow-qs end-to-end health check"
     log "KUBECONFIG = ${KUBECONFIG}"
     log "Timestamp  = $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     log "Selected   = ${SELECTED:-all}"
@@ -862,7 +886,7 @@ main() {
 
     local evidence_file="${EVIDENCE_DIR}/task-23-verify-summary.txt"
     {
-        echo "Enten v2 verify.sh -- $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+        echo "flow-qs verify.sh -- $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
         echo "KUBECONFIG=${KUBECONFIG}"
         echo "Selected:    ${SELECTED:-all}"
         echo "Total=${TOTAL}  PASS=${PASS}  FAIL=${FAIL}  DEFERRED=${DEFERRED}"
