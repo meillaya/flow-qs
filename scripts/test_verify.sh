@@ -10,6 +10,11 @@ mkdir -p "${TMP_DIR}/home" "${TMP_DIR}/bin"
 touch "${TMP_DIR}/kubeconfig"
 ln -s "$(command -v jq)" "${TMP_DIR}/bin/jq"
 
+# verify.sh needs Bash 4 for associative arrays. macOS ships Bash 3.2 at
+# /bin/bash, so keep the interpreter that runs this test first on PATH.
+BASH_BIN="$(command -v bash)"
+TOOL_BIN="$(dirname "${BASH_BIN}")"
+
 cat >"${TMP_DIR}/bin/kubectl" <<'MOCK_KUBECTL'
 #!/usr/bin/env bash
 set -u
@@ -65,7 +70,7 @@ case " $* " in
         ;;
     *" get deployments -A -o json "*)
         case "${MOCK_IMAGE_STATE:-valid}" in
-            valid) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"catalog-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/catalog-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"checkout-service-checkout-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/checkout-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"inventory-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/inventory-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"order-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/order-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"payment-gateway"},"spec":{"template":{"spec":{"containers":[{"image":"registry/payment-gateway:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"synthetic-monitor"},"spec":{"template":{"spec":{"containers":[{"image":"registry/synthetic-monitor:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"incident","name":"incident-engine"},"spec":{"template":{"spec":{"containers":[{"image":"registry/incident-engine:git-0123456789abcdef0123456789abcdef01234567"}]}}}}]}' ;;
+            valid) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"catalog-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/catalog-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"checkout-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/checkout-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"inventory-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/inventory-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"order-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/order-service:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"payment-gateway"},"spec":{"template":{"spec":{"containers":[{"image":"registry/payment-gateway:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"ecom","name":"synthetic-monitor"},"spec":{"template":{"spec":{"containers":[{"image":"registry/synthetic-monitor:git-0123456789abcdef0123456789abcdef01234567"}]}}}},{"metadata":{"namespace":"incident","name":"incident-engine"},"spec":{"template":{"spec":{"containers":[{"image":"registry/incident-engine:git-0123456789abcdef0123456789abcdef01234567"}]}}}}]}' ;;
             mutable) printf '%s\n' '{"items":[{"metadata":{"namespace":"ecom","name":"cart-service"},"spec":{"template":{"spec":{"containers":[{"image":"registry/cart-service:dev"}]}}}}]}' ;;
         esac
         ;;
@@ -279,7 +284,7 @@ run_check() {
     : >"${TMP_DIR}/curl-${check}.log"
     set +e
     HOME="${TMP_DIR}/home" \
-        PATH="${TMP_DIR}/bin:/usr/bin:/bin" \
+        PATH="${TMP_DIR}/bin:${TOOL_BIN}:/usr/bin:/bin" \
         KUBECONFIG="${TMP_DIR}/kubeconfig" \
         MOCK_KUBECTL_LOG="${TMP_DIR}/kubectl-${check}.log" \
         MOCK_KUBECTL_PID_LOG="${TMP_DIR}/kubectl-${check}.pids" \
@@ -306,7 +311,7 @@ run_signal_check() {
     : >"${prefix}.curl.log"
 
     HOME="${TMP_DIR}/home" \
-        PATH="${TMP_DIR}/bin:/usr/bin:/bin" \
+        PATH="${TMP_DIR}/bin:${TOOL_BIN}:/usr/bin:/bin" \
         KUBECONFIG="${TMP_DIR}/kubeconfig" \
         MOCK_KUBECTL_LOG="${prefix}.kubectl.log" \
         MOCK_KUBECTL_PID_LOG="${prefix}.pids" \

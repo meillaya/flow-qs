@@ -36,8 +36,8 @@ printf '{"stale":true}\n' >"${TMP}/real-k6.json"
 write_k6_summary "${TMP}/real-k6.log" "${TMP}/real-k6.json"
 jq -e 'has("stale") | not' "${TMP}/real-k6.json" >/dev/null
 jq -e '.profile == "demo-chaos" and .metrics.iterations == 1221' "${TMP}/real-k6.json" >/dev/null
-[[ "$(yq -c 'select(.kind == "Job") | .spec.template.spec.containers[0].args' "${ROOT}/load/k6-job-demo.yaml")" == '["run","/scripts/load.js"]' ]]
-[[ "$(yq -c 'select(.kind == "Job") | .spec.template.spec.containers[0].args' "${ROOT}/load/k6-job-load.yaml")" == '["run","--out","json=/tmp/results.json","/scripts/load.js"]' ]]
+[[ "$(yq -o=json -I=0 'select(.kind == "Job") | .spec.template.spec.containers[0].args' "${ROOT}/load/k6-job-demo.yaml")" == '["run","/scripts/load.js"]' ]]
+[[ "$(yq -o=json -I=0 'select(.kind == "Job") | .spec.template.spec.containers[0].args' "${ROOT}/load/k6-job-load.yaml")" == '["run","--out","json=/tmp/results.json","/scripts/load.js"]' ]]
 if grep -q '/tmp/results.json' "${ROOT}/scripts/demo.sh"; then exit 1; fi
 
 expect_rejected_without_stale_output() {

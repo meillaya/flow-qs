@@ -5,7 +5,7 @@ const { Rate } = require("k6/metrics");
 const NS = __ENV.SERVICE_NAMESPACE || "ecom";
 const CART_URL = __ENV.CART_URL || `http://cart-service.${NS}:8002`;
 const CHECKOUT_URL = __ENV.CHECKOUT_URL ||
-  `http://checkout-service-checkout-service.${NS}:8003`;
+  `http://checkout-service.${NS}:8003`;
 
 const checkoutSuccessRate = new Rate("checkout_success_rate");
 
@@ -25,7 +25,7 @@ const HEALTH_ENDPOINTS = [
   `http://catalog-service.${NS}:8000/healthz`,
   `http://inventory-service.${NS}:8001/healthz`,
   `http://cart-service.${NS}:8002/healthz`,
-  `http://checkout-service-checkout-service.${NS}:8003/healthz`,
+  `http://checkout-service.${NS}:8003/healthz`,
   `http://order-service.${NS}:8004/healthz`,
   `http://payment-gateway.${NS}:8005/healthz`,
 ];

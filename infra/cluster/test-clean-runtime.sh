@@ -36,14 +36,16 @@ case "$1 $2" in
   'cluster delete')
     cluster_id=$(cut -d'|' -f1 "$MOCK_WORLD/cluster-containers")
     rm -f "$MOCK_WORLD/cluster-present" "$MOCK_WORLD/cluster-containers"
-    sed -i "s/|$cluster_id|/||/" "$MOCK_WORLD/volumes"
+    sed "s/|$cluster_id|/||/" "$MOCK_WORLD/volumes" >"$MOCK_WORLD/volumes.next"
+    mv "$MOCK_WORLD/volumes.next" "$MOCK_WORLD/volumes"
     grep -Fxv "$cluster_id" "$MOCK_WORLD/network-endpoints" >"$MOCK_WORLD/network-endpoints.next" || true
     mv "$MOCK_WORLD/network-endpoints.next" "$MOCK_WORLD/network-endpoints"
     ;;
   'registry delete')
     registry_id=$(cut -d'|' -f1 "$MOCK_WORLD/registry-container")
     rm -f "$MOCK_WORLD/registry-present" "$MOCK_WORLD/registry-container"
-    sed -i "s/|$registry_id|/||/" "$MOCK_WORLD/volumes"
+    sed "s/|$registry_id|/||/" "$MOCK_WORLD/volumes" >"$MOCK_WORLD/volumes.next"
+    mv "$MOCK_WORLD/volumes.next" "$MOCK_WORLD/volumes"
     grep -Fxv "$registry_id" "$MOCK_WORLD/network-endpoints" >"$MOCK_WORLD/network-endpoints.next" || true
     mv "$MOCK_WORLD/network-endpoints.next" "$MOCK_WORLD/network-endpoints"
     ;;
@@ -86,7 +88,8 @@ case "$cmd" in
     if [[ $status == 0 ]]; then
       rm -f "$MOCK_WORLD/cluster-present" "$MOCK_WORLD/registry-present" \
         "$MOCK_WORLD/cluster-containers" "$MOCK_WORLD/registry-container"
-      sed -i 's/|c1|/||/; s/|r1|/||/' "$MOCK_WORLD/volumes"
+      sed 's/|c1|/||/; s/|r1|/||/' "$MOCK_WORLD/volumes" >"$MOCK_WORLD/volumes.next"
+      mv "$MOCK_WORLD/volumes.next" "$MOCK_WORLD/volumes"
       : >"$MOCK_WORLD/network-endpoints"
       : >"$TF_DIR/state-addresses"
     fi
@@ -99,7 +102,7 @@ case "$cmd" in
     done
     if [[ $sub == list ]]; then cat "$TF_DIR/state-addresses"; exit 0; fi
     if [[ $sub == rm ]]; then
-      address=${args[-1]}
+      address=${args[$((${#args[@]} - 1))]}
       grep -Fxq "$address" "$TF_DIR/state-addresses"
       grep -Fxv "$address" "$TF_DIR/state-addresses" >"$TF_DIR/state-addresses.next" || true
       mv "$TF_DIR/state-addresses.next" "$TF_DIR/state-addresses"

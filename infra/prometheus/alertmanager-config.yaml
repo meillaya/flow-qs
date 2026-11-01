@@ -1,6 +1,6 @@
 ## infra/prometheus/alertmanager-config.yaml
 ##
-## Alertmanager routing config — source of truth for the route/receivers tree.
+## Alertmanager routing config: source of truth for the route/receivers tree.
 ## Mirrored verbatim under `alertmanager.config` in infra/prometheus/helm-values.yaml
 ## because the prometheus-community/alertmanager subchart consumes the config as
 ## an inline Helm value (no separate configmap key is mounted by default in the
@@ -45,7 +45,7 @@ route:
     # Opt-in drop route used to silence alert spam during dry runs / fires
     # originating from synthetic injector. The matcher expects a label
     # `severity=dropped-test` (set on incoming alerts via Prom recording rules
-    # or alert generators in Task 16/24).
+    # or alert generators).
     - matchers:
         - severity = "dropped-test"
       receiver: "null"
@@ -55,7 +55,7 @@ receivers:
     webhook_configs:
       - url: http://incident-engine.incident.svc:8088/webhook
         send_resolved: true
-        # max_alerts: 0 (default = unbounded) — keep all grouped alerts in one
+        # max_alerts: 0 (default = unbounded) keeps all grouped alerts in one
         # webhook payload so incident-engine can render the full timeline.
 
   - name: "null"

@@ -18,16 +18,13 @@ OBS_NS="observability"
 ECOM_NS="ecom"
 INCIDENT_NS="incident"
 
-# Note: checkout-service chart's _helpers.tpl derives the service name as
-# `<Release.Name>-<serviceName>` (the chart overrides fullname), so the
-# Service object is named `checkout-service-checkout-service`.
 SERVICES=(
     "cart-service            8002"
     "catalog-service         8000"
     "inventory-service       8001"
     "order-service           8004"
     "payment-gateway         8005"
-    "checkout-service-checkout-service 8003"
+    "checkout-service        8003"
 )
 PRODUCT_LOG_SERVICES=(
     cart-service
@@ -244,7 +241,7 @@ check_3_pods_ready() {
     local workload_count="invalid" invalid_image_count="invalid"
     read -r workload_count invalid_image_count < <(
         printf '%s' "${deployments_out}" | jq -er '
-            ["cart-service", "catalog-service", "checkout-service-checkout-service", "inventory-service",
+            ["cart-service", "catalog-service", "checkout-service", "inventory-service",
              "order-service", "payment-gateway", "synthetic-monitor", "incident-engine"] as $expected
             | [.items[]
                | select(.metadata.name as $name | $expected | index($name))
@@ -594,7 +591,7 @@ check_7_prom_metric() {
         for index in "${!metric_ports[@]}"; do
             curl -sS -m 3 -o /dev/null \
                 "http://127.0.0.1:${metric_ports[$index]}/__verify_metric__" 2>/dev/null || true
-            if [[ "${metric_services[$index]}" == "checkout-service-checkout-service" ]]; then
+            if [[ "${metric_services[$index]}" == "checkout-service" ]]; then
                 curl -sS -m 3 -o /dev/null -X POST \
                     -H 'Content-Type: application/json' -d '{}' \
                     "http://127.0.0.1:${metric_ports[$index]}/checkout" 2>/dev/null || true
@@ -859,7 +856,7 @@ check_11_incident_engine() {
 }
 
 main() {
-    hdr "verify.sh — flow-qs end-to-end health check"
+    hdr "verify.sh: flow-qs end-to-end health check"
     log "KUBECONFIG = ${KUBECONFIG}"
     log "Timestamp  = $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
     log "Selected   = ${SELECTED:-all}"

@@ -4,6 +4,8 @@ Single-binary Loki deployment using `grafana/loki` chart `18.5.0` with local fil
 
 ## Deployment
 
+Run these commands from `infra/loki`.
+
 ```bash
 make apply
 ```
@@ -17,20 +19,28 @@ helm upgrade --install loki grafana-community/loki \
   --version 18.5.0 \
   --namespace observability \
   --create-namespace \
-  --values infra/loki/helm-values.yaml
+  --values helm-values.yaml
 ```
 
 ## Configuration notes
 
-- **Mode**: `SingleBinary` — one pod runs all Loki components. No microservices overhead.
+- **Mode**: `SingleBinary` runs one pod with every Loki component.
 - **Storage**: `filesystem` on a 10Gi PVC mounted at `/loki`.
 - **Schema**: `v13` with the TSDB index store and `filesystem` object store.
 - **Retention**: `168h` (7 days), enforced by the compactor with the filesystem delete-request store.
 - **Ingestion limits**: `50 MB/s` rate, `100 MB/s` burst.
 - **Auth**: disabled. Loki is reached cluster-internally at `http://loki.observability:3100`.
-- **OTLP**: The OpenTelemetry Collector (Task 3) forwards logs via `otlphttp/loki` to `http://loki.observability:3100/otlp`.
+- **OTLP**: The OpenTelemetry Collector forwards logs via `otlphttp/loki` to `http://loki.observability:3100/otlp`.
 
 ## Verification
+
+Start the port forward in another terminal:
+
+```bash
+kubectl -n observability port-forward svc/loki 3100:3100
+```
+
+Then run:
 
 ```bash
 make ready   # wait for pod and query labels

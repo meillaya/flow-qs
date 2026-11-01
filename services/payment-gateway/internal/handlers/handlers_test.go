@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/example/payment-gateway/internal/handlers"
-	"github.com/example/payment-gateway/internal/payment"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/handlers"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/payment"
 )
 
 func Test_ChargeHandler_redacts_card_token_when_request_is_valid(t *testing.T) {

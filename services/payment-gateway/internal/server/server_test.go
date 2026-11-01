@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
-	"github.com/example/payment-gateway/internal/payment"
-	"github.com/example/payment-gateway/internal/server"
+	paymentv1 "github.com/meillaya/flow-qs/services/payment-gateway/gen/proto/payment/v1"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/payment"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/server"
 )
 
 func startTestServer(t *testing.T) (paymentv1.PaymentServiceClient, func()) {

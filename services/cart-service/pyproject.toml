@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Cart service with FastAPI + in-memory state + OTel"
 readme = "README.md"
 authors = [
-    { name = "Atlas Orchestrator", email = "atlas@oh-my-claudecode.local" }
+    { name = "flow-qs contributors" },
 ]
 requires-python = ">=3.12,<3.13"
 dependencies = [

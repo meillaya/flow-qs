@@ -1,101 +1,99 @@
-# flow-qs: Distributed Observability Platform
+# flow-qs: distributed observability platform
 
 [![Lint](https://github.com/Meillaya/flow-qs/actions/workflows/lint.yaml/badge.svg?branch=main)](https://github.com/Meillaya/flow-qs/actions/workflows/lint.yaml)
 [![Test](https://github.com/Meillaya/flow-qs/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/Meillaya/flow-qs/actions/workflows/test.yaml)
 [![Build Images](https://github.com/Meillaya/flow-qs/actions/workflows/build-images.yaml/badge.svg?branch=main)](https://github.com/Meillaya/flow-qs/actions/workflows/build-images.yaml)
 
-A Kubernetes-deployed observability and incident-response platform built around a small polyglot e-commerce app. Every service is instrumented with OpenTelemetry; an OTLP Collector fans traces to Tempo, logs to Loki, and metrics to Prometheus. Grafana ties the three signals together, Prometheus multi-window burn-rate alerts flow through Alertmanager to a tiny incident engine, and that engine assembles a timeline and writes a Markdown postmortem.
+flow-qs runs a small polyglot e-commerce app on a local k3d cluster, then
+breaks it on purpose and checks that the alert, trace, log, and postmortem all
+describe the same incident. It is for platform engineers and SREs who want a
+cluster they can tear down and rebuild while learning the telemetry path.
+
+Eight services run in the cluster. Seven are Python and FastAPI, and one is Go
+and Chi. OpenTelemetry collector nodes fan traces to Tempo, logs to Loki, and
+metrics to Prometheus. Grafana queries all three, and multi-window burn-rate
+alerts reach an incident engine that writes a Markdown postmortem.
+
+The first command:
+
+```bash
+devenv shell
+```
+
+## Quick start
+
+Prerequisites are Docker 24 or newer with at least 6 GiB assigned, Nix 2.18 or
+newer, the devenv CLI, and internet access for the first chart and image pull.
+
+```bash
+devenv shell
+make test     # 159 Python tests and the Go suite, no cluster needed
+make up       # create the cluster, build images, deploy the stack
+make verify   # run the 11 live checks
+make demo     # drive load and chaos until a postmortem appears
+```
+
+`make test` is the shortest check that the code is sound. It runs without
+Docker or a cluster.
+
+`make up` builds images from the current commit. Commit service changes before
+running it, or the build refuses to start.
+
+`make verify` exits 0 only when all 11 checks pass. `make demo` exits 0 only
+when the k6 thresholds pass, the checkout alert fires, and the postmortem names
+the same Chaos Mesh experiment. A failed demo cleans up after itself and exits
+nonzero.
 
 ## Architecture
 
-```mermaid
-graph TB
-    subgraph Load["Load"]
-        k6[k6 Job]
-    end
+### Request path
 
-    subgraph Services["ecom namespace"]
-        catalog[catalog-service<br/>Python/FastAPI :8000]
-        inventory[inventory-service<br/>Python/FastAPI :8001 + gRPC :50051]
-        cart[cart-service<br/>Python/FastAPI :8002]
-        checkout[checkout-service<br/>Python/FastAPI :8003]
-        order[order-service<br/>Python/FastAPI :8004]
-        payment[payment-gateway<br/>Go/Chi HTTP :8005 gRPC :50052]
-        synthetic[synthetic-monitor]
-    end
+![Checkout fans out to cart and order over HTTP and inventory and payment over gRPC](docs/figures/request-path.png)
 
-    subgraph Observability["observability namespace"]
-        otel[OTel Collector<br/>:4317 gRPC / :4318 HTTP]
-        agents[OTel node log agents]
-        tempo[Tempo]
-        loki[Loki]
-        prom[Prometheus]
-        am[Alertmanager]
-        grafana[Grafana :3000]
-    end
+Checkout is the only orchestrator. It reads the cart over HTTP, reserves stock
+over gRPC, charges over gRPC, and writes the order over HTTP. catalog-service
+serves product reads and is not on the checkout path.
 
-    subgraph Response["incident namespace"]
-        engine[incident-engine<br/>:8088/webhook]
-        postmortem[postmortem.md]
-    end
+### Telemetry path
 
-    subgraph Chaos["chaos-testing namespace"]
-        chaos[Chaos Mesh]
-    end
+![One OTLP collector feeds Tempo, Loki, and Prometheus, and Grafana queries all three](docs/figures/telemetry-path.png)
 
-    k6 --> checkout
-    checkout -->|HTTP| cart
-    checkout -->|HTTP| order
-    checkout -->|gRPC| inventory
-    checkout -->|gRPC| payment
+Application services export OTLP to one collector, which fans traces to Tempo,
+logs to Loki, and metrics to Prometheus. Grafana queries all three. Payment is
+the one bounded exception and exposes a direct Prometheus scrape.
 
-    Services -->|OTLP| otel
-    payment -->|scrape| prom
-    synthetic -->|probes| Services
-    Services -->|stdout/stderr| agents
-    agents -->|OTLP| otel
+### Incident path
 
-    otel -->|traces| tempo
-    otel -->|logs| loki
-    otel -->|metrics| prom
+![Burn-rate alerts reach Alertmanager and the incident engine writes a postmortem](docs/figures/incident-path.png)
 
-    prom --> am
-    am -->|webhook| engine
-    engine --> postmortem
+Prometheus burn-rate rules send alerts through Alertmanager to incident-engine.
+The engine queries Tempo, Loki, and Prometheus, then writes a Markdown
+postmortem.
 
-    tempo --> grafana
-    loki --> grafana
-    prom --> grafana
-
-    chaos -->|pod/network/dns/cpu| Services
-```
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) explains the services, signal schemas,
+SLO rules, and failure paths.
 
 ## Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Cluster | k3d + Terraform | Local Kubernetes, reproducible |
-| Services | Python/FastAPI + Go/Chi | Polyglot microservices with OTel auto-instrumentation |
-| Telemetry | OpenTelemetry Collector | One OTLP gateway plus per-node log agents |
-| Traces | Grafana Tempo | Distributed trace storage and query |
-| Logs | Grafana Loki | Log aggregation |
-| Metrics | Prometheus | Time-series metrics and SLO recording rules |
-| Alerting | Alertmanager | Routes alerts to the incident engine |
-| Dashboards | Grafana | Provisioned RED, SLO, trace, and log dashboards |
-| Chaos | Chaos Mesh | Pod, network, DNS, and CPU fault injection |
-| Load | k6 | Smoke, load, stress, and spike profiles |
-| Dev env | devenv | Reproducible shell: Python 3.12, Go 1.26.5, k6, Terraform, kubectl, Helm |
+| Layer | Technology | Role |
+|---|---|---|
+| Cluster | k3d 5.9 and Terraform | One server, two agents, and a local registry |
+| Services | Python 3.12 and Go 1.26 | Seven FastAPI services and one Chi service |
+| Telemetry | OpenTelemetry Collector | One OTLP gateway plus one log agent per node |
+| Traces | Grafana Tempo | Trace storage with 7 day retention |
+| Logs | Grafana Loki | Log storage with 7 day retention |
+| Metrics | Prometheus | 31 day retention, SLO recording and alert rules |
+| Alerting | Alertmanager | Grouping, inhibition, and the incident engine webhook |
+| Dashboards | Grafana | Ten provisioned RED, trace, log, and SLO dashboards |
+| Incident response | incident-engine | Queries Tempo, Loki, and Prometheus, then writes a postmortem |
+| Chaos | Chaos Mesh | Pod, network, DNS, and CPU faults |
+| Load | k6 | Smoke, load, stress, spike, and chaos-aware demo profiles |
+| Dev env | devenv | Python, Go, k3d, Terraform, kubectl, Helm, k6, and linters |
 
-## Quick Start
+## Local access
 
-```bash
-devenv shell    # reproducible dev shell
-make up         # provision k3d cluster, observability stack, services
-make verify     # sanity-check telemetry, SLO rules, dashboards, service health
-make demo       # end-to-end: load -> chaos -> incident -> postmortem
-```
-
-The stack stays inside the cluster. Open separate terminals for the local demo endpoints — there is no Ingress or permanent host exposure:
+Every platform Service is `ClusterIP`. Open one forward per surface you need
+and stop it with Ctrl+C when finished.
 
 ```bash
 kubectl -n observability port-forward svc/grafana 3000:80
@@ -103,45 +101,75 @@ kubectl -n observability port-forward svc/prometheus 9090:80
 kubectl -n observability port-forward svc/alertmanager 9093:9093
 ```
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Grafana | http://localhost:3000 | `admin / admin` (local demo only) |
-| Prometheus | http://localhost:9090 | none |
-| Alertmanager | http://localhost:9093 | none |
+| Surface | URL | Credentials |
+|---|---|---|
+| Grafana | http://127.0.0.1:3000 | `admin` / `admin`, local demo only |
+| Prometheus | http://127.0.0.1:9090 | none |
+| Alertmanager | http://127.0.0.1:9093 | none |
+
+The URLs do not work until the matching forward is running. There is no
+Ingress, TLS, or permanent host exposure.
 
 ## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system diagram, services, telemetry and alert flows, SLO strategy
-- [docs/RUNBOOK.md](docs/RUNBOOK.md) — common operations, recovery, cookbooks
-- [docs/DEMO.md](docs/DEMO.md) — what `make demo` does and how to read the artifacts
-- [docs/SETUP.md](docs/SETUP.md) — full setup instructions and prerequisites
-- [docs/examples/postmortems/](docs/examples/postmortems/) — annotated template and illustrative postmortems
+- [docs/SETUP.md](docs/SETUP.md): tool pins, provisioning, access, and the full
+  verification contract.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): services, protocols, telemetry
+  and alert flows, and SLO strategy.
+- [docs/RUNBOOK.md](docs/RUNBOOK.md): response playbooks and cookbooks for
+  adding a service, SLO, or chaos experiment.
+- [docs/DEMO.md](docs/DEMO.md): what `make demo` does, the thresholds, and the
+  artifacts it leaves behind.
+- [docs/DRAWINGS.md](docs/DRAWINGS.md): regenerate and inspect the architecture
+  figures.
+- [docs/examples/postmortems/](docs/examples/postmortems/): a template, a
+  historical example, and postmortems captured from demo runs.
+- [CONTRIBUTING.md](CONTRIBUTING.md): local gates, change rules, and commit
+  format.
 
-## Repository Layout
+## Repository layout
 
-```text
-.
-├── Makefile                    # up, down, demo, lint, test
-├── devenv.nix / devenv.yaml    # Reproducible dev shell
-├── infra/                      # Terraform k3d cluster + OTel/Tempo/Loki/Prom/Grafana configs
-├── services/                   # Six product services + synthetic monitor + incident engine
-├── charts/                     # Per-service Helm charts
-├── dashboards/                 # Provisioned Grafana dashboards
-├── observability/              # Prometheus rules and Alertmanager templates
-├── slo/                        # SLO definitions
-├── chaos/                      # Chaos Mesh experiments
-├── load/                       # k6 scripts and Kubernetes Jobs
-├── scripts/                    # Validation and build helpers
-└── docs/                       # README, ARCHITECTURE, RUNBOOK, DEMO, SETUP
-```
+| Path | Contents |
+|---|---|
+| `Makefile` | Cluster, deploy, verify, test, lint, demo, and figure targets |
+| `devenv.nix`, `devenv.yaml` | Reproducible development shell |
+| `infra/` | Terraform cluster, collector, Tempo, Loki, Prometheus, and Grafana config |
+| `services/` | Six product services, synthetic monitor, and incident engine |
+| `charts/` | One Helm chart per service plus a shared template chart |
+| `dashboards/` | Ten provisioned Grafana dashboards |
+| `observability/` | Prometheus recording and alert rules, Alertmanager template |
+| `slo/` | SLO source files |
+| `chaos/` | Chaos Mesh experiments and schedule tests |
+| `load/` | k6 scripts, Kubernetes Jobs, and demo threshold tests |
+| `scripts/` | Deployment, verification, SLO generation, and contract tests |
+| `docs/` | Setup, architecture, runbook, demo, figures, and examples |
 
-## Development Commands
+## Development commands
 
-```bash
-make lint        # Helm lint, Ruff, ty, gofmt, go vet, golangci-lint
-make test        # pytest + go test
-make lint-chart  # Helm lint every local chart
-make verify      # validate live telemetry, rules, dashboards, and services
-make down        # remove only this repository's runtime resources
-make clean       # make down + remove Terraform/devenv local state
-```
+| Command | Purpose |
+|---|---|
+| `make check` | Run lint, tests, static contracts, SLO rules, prose, and shellcheck |
+| `make test` | Run pytest and go test |
+| `make lint` | Run Helm, Ruff, ty, gofmt, go vet, and golangci-lint |
+| `make contracts` | Run the static contract tests, no cluster access |
+| `make rules` | Validate SLOs, regenerate rules, and run promtool |
+| `make prose` | Run the house prose checker |
+| `make shellcheck` | Check shell scripts for errors and warnings |
+| `make figures` | Regenerate the Excalidraw scenes and PNGs |
+| `make verify` | Check a live cluster |
+| `make down` | Remove this repository's runtime resources |
+| `make clean` | `make down` plus Terraform and local state |
+
+## Limits
+
+This is a local demo, not a production deployment. It does not ship Ingress,
+TLS, authentication, backups, or highly available storage. There is one
+collector gateway and one replica per observability service.
+
+k3d 5.9.0's published compatibility matrix stops at K3s 1.33. The repository
+pins K3s 1.35.6 as a deliberate exception and gates it with the opt-in
+`make cluster-smoke` lifecycle test.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

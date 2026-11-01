@@ -36,14 +36,19 @@ PYTHON_EXTRA_DEV_SERVICES := services/catalog-service services/checkout-service 
     services/order-service services/synthetic-monitor
 LOCAL_CHARTS := $(sort $(patsubst %/Chart.yaml,%,$(wildcard \
     charts/*/Chart.yaml infra/otel-collector/helm/Chart.yaml)))
+SHELL_SCRIPTS := $(wildcard scripts/*.sh) $(wildcard chaos/tests/*.sh) \
+    $(wildcard load/tests/*.sh) $(wildcard infra/*.sh) $(wildcard infra/cluster/*.sh)
+FIGURES := request-path telemetry-path incident-path
+EXCALIDRAW ?= excalidraw
 
 .PHONY: help up down verify clean clean-runtime demo lint lint-chart test validate-infra \
-        build-push-images \
+        build-push-images prose contracts check rules shellcheck figures \
         cluster-up cluster-down cluster-list cluster-smoke \
         helm-repos helm-add-repos helm-obs helm-chaos helm-services kubectl-wait
 
 help: ## Show available targets
-	@awk 'BEGIN {FS = ":.*##"; printf "Targets:\n"} \
+	@printf 'Targets:\n'
+	@awk 'BEGIN {FS = ":.*##"} \
 		/^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST) | sort
 
 up: cluster-up helm-add-repos ## Bring up everything: cluster + observability stack + services
@@ -284,3 +289,54 @@ test: ## pytest + go test
 	done; \
 	echo "==> services/payment-gateway: go test"; \
 	(cd services/payment-gateway && go test ./...)
+
+prose: ## Check prose against the house style
+	@python3 tools/check-prose.py
+
+contracts: helm-add-repos ## Run the static contract tests that need no cluster
+	@bash scripts/test_verify.sh
+	@bash scripts/test_script_validation_edges.sh
+	@bash scripts/test_docs_contracts.sh
+	@bash infra/test-platform-contracts.sh
+	@bash infra/cluster/test-clean-runtime.sh
+	@bash chaos/tests/verify-schedules.sh
+	@bash load/tests/verify-demo-thresholds.sh
+	@bash load/tests/verify-demo-summary.sh
+	@bash load/tests/verify-causal-demo.sh
+
+check: lint test contracts rules prose shellcheck ## Run every local gate
+
+rules: ## Validate SLOs, regenerate rules, and run promtool
+	@set -euo pipefail; \
+	hash() { if command -v sha256sum >/dev/null 2>&1; then \
+	    sha256sum "$$@"; else shasum -a 256 "$$@"; fi; }; \
+	before="$$(hash observability/prometheus-rules/alert_rules.yaml \
+	    observability/prometheus-rules/sli_recording_rules.yaml)"; \
+	uv run --with pyyaml python scripts/validate_slo.py slo/*.yaml; \
+	uv run --with pyyaml python scripts/build_prometheus_rules.py; \
+	after="$$(hash observability/prometheus-rules/alert_rules.yaml \
+	    observability/prometheus-rules/sli_recording_rules.yaml)"; \
+	if [[ "$$before" != "$$after" ]]; then \
+	    echo "generated rules changed; review and commit them" >&2; exit 1; \
+	fi; \
+	uv run scripts/validate_observability_contract.py; \
+	promtool check rules observability/prometheus-rules/alert_rules.yaml \
+	    observability/prometheus-rules/sli_recording_rules.yaml; \
+	promtool test rules observability/prometheus-rules/*_test.yaml
+
+shellcheck: ## Check shell scripts for errors and warnings
+	@shellcheck -S warning $(SHELL_SCRIPTS)
+
+figures: ## Regenerate the Excalidraw scenes and render the PNGs
+	@python3 docs/figures/build_figures.py
+	@set -euo pipefail; \
+	browser_args=(); \
+	if [[ -n "$${EXCALIDRAW_BROWSER_PATH:-}" ]]; then \
+	    browser_args=(--browser-path "$$EXCALIDRAW_BROWSER_PATH"); \
+	fi; \
+	for figure in $(FIGURES); do \
+	    echo "==> docs/figures/$$figure.png"; \
+	    $(EXCALIDRAW) render "docs/figures/$$figure.excalidraw" \
+	        --out "docs/figures/$$figure.png" --scale 2 --max-width 3200 \
+	        "$${browser_args[@]}"; \
+	done

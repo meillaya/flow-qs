@@ -5,7 +5,7 @@ set -euo pipefail
 REPO_ROOT="${DEMO_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${REPO_ROOT}"
 
-export KUBECONFIG="${KUBECONFIG:-/home/mei/.kube/config-observability}"
+export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config-observability}"
 LOAD_NAMESPACE="${LOAD_NAMESPACE:-load}"
 CHAOS_NAMESPACE="${CHAOS_NAMESPACE:-chaos-testing}"
 INCIDENT_NAMESPACE="${INCIDENT_NAMESPACE:-incident}"
@@ -24,7 +24,7 @@ ALERT_CHAOS_DISPLAY_KIND="${ALERT_CHAOS_DISPLAY_KIND:-PodChaos}"
 EXPECTED_INCIDENT_SERVICE="${EXPECTED_INCIDENT_SERVICE:-checkout-service}"
 EXPECTED_INCIDENT_ALERT="${EXPECTED_INCIDENT_ALERT:-ServiceDown}"
 INCIDENT_POD=""
-EXPECTED_POSTMORTEM_HEADER="# Postmortem — \`${EXPECTED_INCIDENT_ALERT}\` on \`${EXPECTED_INCIDENT_SERVICE}\`"
+EXPECTED_POSTMORTEM_HEADER="# Postmortem: \`${EXPECTED_INCIDENT_ALERT}\` on \`${EXPECTED_INCIDENT_SERVICE}\`"
 EXPECTED_CHAOS_MARKER="**${ALERT_CHAOS_NAME}** (${ALERT_CHAOS_DISPLAY_KIND})"
 PROM_RULES_PATH="${PROM_RULES_PATH:-/api/v1/namespaces/observability/services/http:prometheus:80/proxy/api/v1/rules}"
 ALERTMANAGER_READY_PATH="${ALERTMANAGER_READY_PATH:-/api/v1/namespaces/observability/services/http:alertmanager:9093/proxy/-/ready}"
@@ -491,7 +491,7 @@ main() {
   local k6_log="${LOG_DIR}/task-24-k6-job-${RUN_ID}.log"
   local k6_results="${LOG_DIR}/task-24-k6-results-${RUN_ID}.json"
   local -a services=(catalog-service inventory-service cart-service
-    checkout-service-checkout-service order-service payment-gateway)
+    checkout-service order-service payment-gateway)
 
   mkdir -p "${LOG_DIR}" "${POSTMORTEM_OUT_DIR}"
   [[ "${RUN_ID}" =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid demo run id"

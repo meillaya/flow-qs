@@ -1,80 +1,36 @@
 # Architecture
 
-This document describes the flow-qs observability platform: the services, how they talk to each other, how telemetry moves through the stack, how alerts become postmortems, and how SLOs and chaos experiments are wired together.
+This document covers the request path, the telemetry path, and the alert path. It also lists service responsibilities, the signal schema, SLO strategy, and the chaos and load testing approach.
 
-## System Diagram
+## Request path
 
-```mermaid
-graph TB
-    subgraph Load["Load Generation"]
-        k6[k6 Job]
-    end
+![Checkout fans out to cart and order over HTTP and inventory and payment over gRPC](figures/request-path.png)
 
-    subgraph Services["E-commerce Services (ecom namespace)"]
-        catalog[catalog-service<br/>Python/FastAPI :8000]
-        inventory[inventory-service<br/>Python/FastAPI :8001 + gRPC :50051]
-        cart[cart-service<br/>Python/FastAPI :8002]
-        checkout[checkout-service<br/>Python/FastAPI :8003]
-        order[order-service<br/>Python/FastAPI :8004]
-        payment[payment-gateway<br/>Go/Chi HTTP :8005 gRPC :50052]
-        synthetic[synthetic-monitor<br/>Python/FastAPI :8000]
-    end
+Six product services serve the demo. k6 drives checkout, and checkout is the only orchestrator: it reads the cart over HTTP, reserves stock over gRPC, charges over gRPC, and writes the order over HTTP. A failed step triggers compensation in reverse order.
 
-    subgraph Observability["Observability (observability namespace)"]
-        otel[OTel Collector gateway<br/>:4317 gRPC / :4318 HTTP]
-        agents[OTel node log agents]
-        tempo[Tempo]
-        loki[Loki]
-        prom[Prometheus]
-        am[Alertmanager]
-        grafana[Grafana :3000]
-    end
+catalog-service serves product reads and is not on the checkout path. synthetic-monitor probes every product service and exports the availability series behind the `ServiceDown` alert.
 
-    subgraph Response["Incident Response (incident namespace)"]
-        engine[incident-engine<br/>:8088/webhook]
-        postmortem[postmortem.md]
-    end
+## Telemetry path
 
-    subgraph Chaos["Chaos (chaos-testing namespace)"]
-        chaos[Chaos Mesh]
-    end
+![One OTLP collector feeds Tempo, Loki, and Prometheus, and Grafana queries all three](figures/telemetry-path.png)
 
-    k6 --> checkout
-    checkout -->|HTTP| cart
-    checkout -->|HTTP| order
-    checkout -->|gRPC| inventory
-    checkout -->|gRPC| payment
+Application services export OTLP to `otel-collector.observability:4317`. Node log agents tail container logs and send them to the same gateway. The gateway adds Kubernetes metadata and fans out:
 
-    catalog -->|OTLP| otel
-    inventory -->|OTLP| otel
-    cart -->|OTLP| otel
-    checkout -->|OTLP| otel
-    order -->|OTLP| otel
-    payment -->|OTLP traces| otel
-    payment -->|Prometheus scrape| prom
-    synthetic -->|HTTP health probes| Services
-    synthetic -->|OTLP| otel
+- traces to Tempo
+- logs to Loki
+- metrics to Prometheus remote write
 
-    Services -->|container stdout/stderr| agents
-    agents -->|OTLP logs| otel
+Grafana queries Tempo, Loki, and Prometheus. payment-gateway also exposes one direct Prometheus scrape. It is the only service without an OTLP metrics path, and the scrape stays bounded to that one deployment.
 
-    otel -->|traces| tempo
-    otel -->|logs| loki
-    otel -->|metrics| prom
+## Alert path
 
-    prom -->|alert rules| am
-    am -->|webhook| engine
-    engine --> postmortem
+![Burn-rate alerts reach Alertmanager and the incident engine writes a postmortem](figures/incident-path.png)
 
-    tempo --> grafana
-    loki --> grafana
-    prom --> grafana
-    am --> grafana
+Prometheus evaluates the recording and alert rules every 30 seconds. Alertmanager groups by `alertname` and `service`, then posts the group to incident-engine. The engine queries Prometheus, Tempo, and Loki for context, writes a Markdown postmortem, and stores incident metadata in SQLite.
 
-    chaos -->|pod/network/dns/cpu| Services
-```
+Chaos Mesh injects faults into the `ecom` namespace during the demo, so the alert path has a known cause to correlate.
 
-## Service Responsibilities
+## Service responsibilities
 
 | Service | Language | Runtime | Responsibility |
 |---------|----------|---------|----------------|
@@ -84,10 +40,10 @@ graph TB
 | checkout-service | Python | FastAPI :8003 | Saga orchestrator: cart, inventory, payment, order. Compensation on failure. |
 | order-service | Python | FastAPI :8004 | Order persistence. SQLite backend. |
 | payment-gateway | Go | Chi HTTP :8005 + gRPC :50052 | Mock payment charge/refund. In-memory store. |
-| synthetic-monitor | Python | FastAPI :8000 | Probes all six application services in-cluster and exports availability telemetry used by ServiceDown alerts. |
+| synthetic-monitor | Python | FastAPI :8000 | Probes all six application services in-cluster and exports the availability telemetry behind `ServiceDown` alerts. |
 | incident-engine | Python | FastAPI :8088 | Receives Alertmanager webhooks and writes Markdown postmortems. |
 
-## Inter-service Protocols
+## Inter-service protocols
 
 - **HTTP/JSON**: browser-facing or simple calls.
   - `checkout-service` -> `cart-service`
@@ -99,7 +55,7 @@ graph TB
 
 OpenTelemetry context propagation works across both HTTP and gRPC, so a single trace follows a checkout request from k6 through checkout, inventory, payment, and order.
 
-## Telemetry Flow
+## Telemetry flow
 
 1. Python services export traces and the canonical HTTP request-duration histogram through OTLP to `otel-collector.observability.svc:4317`.
 2. Payment exports traces through OTLP and exposes the same histogram schema to Prometheus through the bounded direct-scrape exception.
@@ -115,15 +71,15 @@ The stable RED series is `http_server_request_duration_seconds_{bucket,count,sum
 Prometheus resource labels are `service_name` and `service_namespace`; HTTP
 labels are `http_response_status_code` and the route template `http_route`.
 
-## Alerting Flow
+## Alert flow
 
 1. Prometheus evaluates recording rules and alert rules every 30 seconds.
 2. When an SLO burn-rate threshold is breached, Prometheus sends the alert to Alertmanager.
 3. Alertmanager groups alerts by `alertname` and `service`, then routes them to the `incident-engine` webhook.
 4. The incident engine receives the webhook, queries Prometheus for the active alert and recent metrics, fetches related traces from Tempo, and assembles a timeline.
-5. The engine writes a Markdown postmortem file with summary, impact, timeline, root cause, remediation, and follow-ups.
+5. The engine writes a Markdown postmortem with summary, impact, timeline, root cause, resolution, and lessons learned.
 
-## SLO Strategy
+## SLO strategy
 
 SLOs live in `slo/*.yaml`. Each file defines SLIs, objectives, rolling windows, and error budgets. The build helper `scripts/build_prometheus_rules.py` turns those definitions into:
 
@@ -152,9 +108,9 @@ SLOs live in `slo/*.yaml`. Each file defines SLIs, objectives, rolling windows, 
 | payment-gateway | 99.5% | < 1000 ms |
 | end-to-end-checkout | 99% | < 2000 ms |
 
-## Chaos + Load Testing Approach
+## Chaos and load testing
 
-### Load Testing
+### Load testing
 
 k6 scripts in `load/k6/` cover four profiles:
 
@@ -166,7 +122,7 @@ k6 scripts in `load/k6/` cover four profiles:
 Each profile runs as a Kubernetes Job in the `load` namespace and reaches the
 `ecom` services through namespace-qualified ClusterIP DNS.
 
-### Chaos Testing
+### Chaos testing
 
 Chaos Mesh experiments in `chaos/experiments/`:
 
@@ -179,8 +135,9 @@ Chaos Mesh experiments in `chaos/experiments/`:
 
 `make demo` starts load, applies a causal checkout PodChaos, waits for its correlated ServiceDown postmortem, then starts the recurring checkout workflow while the load remains active. It removes the workflow, PodChaos, workflow nodes, and load Job on every exit path.
 
-## Related Docs
+## Related docs
 
 - [RUNBOOK.md](./RUNBOOK.md): operational playbooks and cookbooks
 - [DEMO.md](./DEMO.md): how to run and interpret the demo
 - [SETUP.md](./SETUP.md): prerequisites and full setup
+- [DRAWINGS.md](./DRAWINGS.md): architecture figure source and regeneration

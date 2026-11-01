@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/example/payment-gateway/internal/metrics"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/metrics"
 )
 
 func Test_Registry_exposes_cumulative_histogram_with_canonical_labels(t *testing.T) {

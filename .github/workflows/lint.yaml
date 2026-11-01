@@ -24,12 +24,112 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Verify service and infrastructure coverage
+      - name: Install yq
+        env:
+          YQ_VERSION: v4.53.3
+          YQ_SHA256: fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4
         run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+
+      - name: Install xxd
+        run: |
+          if ! command -v xxd >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y xxd
+          fi
+
+      - name: Verify service, infrastructure, and prose contracts
+        run: |
+          python3 tools/check-prose.py
           python3 .github/workflows/test_verify_ci_structure.py
           python3 .github/workflows/verify_ci_structure.py
+          bash scripts/test_verify.sh
+          bash scripts/test_docs_contracts.sh
           bash infra/test-platform-contracts.sh
           bash infra/cluster/test-clean-runtime.sh
+
+  contracts:
+    name: Static Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.16.0
+
+      - name: Install yq
+        env:
+          YQ_VERSION: v4.53.3
+          YQ_SHA256: fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+
+      - name: Install contract tools
+        env:
+          K6_SHA256: 295d961ebfca306f295f1133068dcd403a8171c87f387928f5f30b0fbcff858a
+          KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/k6.tgz \
+            https://github.com/grafana/k6/releases/download/v2.1.0/k6-v2.1.0-linux-amd64.tar.gz
+          echo "${K6_SHA256}  /tmp/k6.tgz" | sha256sum -c -
+          tar -xzf /tmp/k6.tgz -C /tmp
+          sudo install -m 0755 /tmp/k6-v2.1.0-linux-amd64/k6 /usr/local/bin/k6
+
+          curl -fsSL -o /tmp/kubeconform.tgz \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          echo "${KUBECONFORM_SHA256}  /tmp/kubeconform.tgz" | sha256sum -c -
+          tar -xzf /tmp/kubeconform.tgz -C /tmp
+          sudo install -m 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+
+          if ! command -v xxd >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y xxd
+          fi
+
+      - name: Run static contracts
+        run: make contracts
+
+  rules:
+    name: SLO Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Validate and regenerate SLO rules
+        run: |
+          uv run --with pyyaml python scripts/validate_slo.py slo/*.yaml
+          uv run --with pyyaml python scripts/build_prometheus_rules.py
+          uv run scripts/validate_observability_contract.py
+          git diff --exit-code -- observability/prometheus-rules
 
   python-lint:
     name: Python Lint (${{ matrix.service }})
@@ -111,10 +211,34 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
       - name: Set up Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.16.0
+
+      - name: Install yq
+        env:
+          YQ_VERSION: v4.53.3
+          YQ_SHA256: fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+
+      - name: Install kubectl
+        env:
+          KUBECTL_SHA256: 5d11e2ba01ea68ffd053f56e27738e2b4330013ee67f7e46c6da6c585d3c9926
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/kubectl \
+            https://dl.k8s.io/release/v1.35.6/bin/linux/amd64/kubectl
+          echo "${KUBECTL_SHA256}  /tmp/kubectl" | sha256sum -c -
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
 
       - name: Configure Helm repositories
         run: make helm-add-repos

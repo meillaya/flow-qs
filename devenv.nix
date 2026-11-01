@@ -28,7 +28,12 @@
     k6
     grpcurl
     kustomize
+    kubeconform
+    yq-go
+    jq
+    curl
     prometheus
+    prometheus.cli
     prometheus-alertmanager
     shellcheck
   ];

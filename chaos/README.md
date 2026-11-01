@@ -1,4 +1,4 @@
-# Chaos Engineering with Chaos Mesh
+# Chaos engineering with Chaos Mesh
 
 This directory contains Chaos Mesh experiment manifests for the observability
 platform demo services. All experiments target user workloads in the `ecom`
@@ -80,7 +80,7 @@ Apply all experiments in sequence with pauses:
 cd chaos && make chaos-all
 ```
 
-Validate all four Task 20 scheduling structures and their exact embedded fault
+Validate all four scheduling structures and their exact embedded fault
 specs against pinned Chaos Mesh 2.8.3 CRDs:
 
 ```bash
@@ -115,4 +115,4 @@ kubectl delete -f chaos/experiments/pod-kill-checkout.yaml
 - Each manifest sets a `duration` so the experiment self-terminates.
 - Standalone schedules forbid overlapping children and retain only five
   history entries. Delete the schedule when recurring injection is no longer
-  wanted; `make clean` deletes all four Task 20 scheduled resources.
+  wanted; `make clean` deletes all four scheduled resources.

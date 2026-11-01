@@ -29,7 +29,7 @@ sleep() { :; }
 unset -f sleep
 
 manifest="${ROOT}/chaos/experiments/demo-alert-checkout.yaml"
-yq -e '.kind == "PodChaos" and .metadata.name == "demo-alert-checkout" and .metadata.namespace == "chaos-testing" and .spec.action == "pod-failure" and .spec.mode == "all" and .spec.duration == "3m" and .spec.selector.namespaces == ["ecom"] and .spec.selector.labelSelectors["app.kubernetes.io/name"] == "checkout-service"' "${manifest}" >/dev/null
+yq -e '.kind == "PodChaos" and .metadata.name == "demo-alert-checkout" and .metadata.namespace == "chaos-testing" and .spec.action == "pod-failure" and .spec.mode == "all" and .spec.duration == "3m" and (.spec.selector.namespaces | length) == 1 and .spec.selector.namespaces[0] == "ecom" and .spec.selector.labelSelectors["app.kubernetes.io/name"] == "checkout-service"' "${manifest}" >/dev/null
 [[ "${ALERT_CHAOS_NAME}" == "demo-alert-checkout" ]]
 [[ "${ALERT_CHAOS_RESOURCE_KIND}" == "podchaos" ]]
 [[ "${EXPECTED_INCIDENT_SERVICE}" == "checkout-service" ]]
@@ -38,13 +38,13 @@ valid="${TMP}/valid.md"
 wrong_service="${TMP}/wrong-service.md"
 wrong_chaos="${TMP}/wrong-chaos.md"
 missing_correlation="${TMP}/missing-correlation.md"
-printf '%s\n' "# Postmortem — \`ServiceDown\` on \`checkout-service\`" \
+printf '%s\n' "# Postmortem: \`ServiceDown\` on \`checkout-service\`" \
   '**demo-alert-checkout** (PodChaos)' >"${valid}"
-printf '%s\n' "# Postmortem — \`ServiceDown\` on \`catalog-service\`" \
+printf '%s\n' "# Postmortem: \`ServiceDown\` on \`catalog-service\`" \
   '**demo-alert-checkout** (PodChaos)' >"${wrong_service}"
-printf '%s\n' "# Postmortem — \`ServiceDown\` on \`checkout-service\`" \
+printf '%s\n' "# Postmortem: \`ServiceDown\` on \`checkout-service\`" \
   '**other-chaos** (PodChaos)' >"${wrong_chaos}"
-printf '%s\n' "# Postmortem — \`ServiceDown\` on \`checkout-service\`" \
+printf '%s\n' "# Postmortem: \`ServiceDown\` on \`checkout-service\`" \
   >"${missing_correlation}"
 postmortem_matches_file "${valid}"
 if postmortem_matches_file "${wrong_service}"; then exit 1; fi
@@ -63,8 +63,8 @@ if postmortem_matches_remote "${missing_correlation}"; then exit 1; fi
 
 env -u KUBECONFIG helm show crds chaos-mesh/chaos-mesh --version 2.8.3 \
   >"${TMP}/crds.yaml"
-yq 'select(.kind == "CustomResourceDefinition" and .spec.names.kind == "PodChaos") | .spec.versions[] | select(.name == "v1alpha1") | .schema.openAPIV3Schema' \
-  "${TMP}/crds.yaml" >"${TMP}/podchaos_v1alpha1.json"
+yq -o=json 'select(.kind == "CustomResourceDefinition" and .spec.names.kind == "PodChaos") | .spec.versions[] | select(.name == "v1alpha1") | .schema.openAPIV3Schema' \
+  "${TMP}/crds.yaml" >"${TMP}/PodChaos_v1alpha1.json"
 kubeconform -strict \
   -schema-location "${TMP}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
   "${manifest}"

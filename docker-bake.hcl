@@ -3,11 +3,13 @@ variable "REGISTRY" {
 }
 
 variable "REPOSITORY" {
-  default = "example/flow-qs"
+  default = "meillaya/flow-qs"
 }
 
 variable "SHA" {
-  default = "latest"
+  # Local builds default to a development tag. The Makefile overrides this
+  # with git-<commit> for every image it pushes.
+  default = "dev"
 }
 
 variable "SERVICES" {

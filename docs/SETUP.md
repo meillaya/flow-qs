@@ -20,7 +20,7 @@ pins these external artifacts:
 | k6 | `grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669` |
 
 Prerequisites are Docker 24 or newer with at least 6 GiB assigned, Nix 2.18 or
-newer, and internet access for the first chart/image pull.
+newer, the devenv CLI, and internet access for the first chart/image pull.
 
 ```bash
 devenv shell
@@ -153,7 +153,18 @@ bash scripts/test_script_validation_edges.sh
 bash scripts/test_verify.sh
 ```
 
-Regeneration must leave no diff in the two generated rule files.
+Regeneration must leave no diff in the two generated rule files. `make rules`
+runs the generation, the semantic validator, promtool, and an idempotence
+check in one step.
+
+The static gate runs every contract test that needs no cluster:
+
+```bash
+make contracts
+```
+
+That target needs `yq`, `k6`, and `kubeconform` from the development shell.
+`make check` adds lint, tests, and the prose gate.
 
 ## Load and demo
 

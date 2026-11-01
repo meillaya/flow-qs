@@ -1,4 +1,4 @@
-# Postmortem — `ServiceDown` on `checkout-service`
+# Postmortem: `ServiceDown` on `checkout-service`
 _Generated 2026-07-16T05:27:54.202794+00:00 by incident-engine._
 ## Summary
 On 2026-07-16T05:27:43.370000+00:00, the alert `ServiceDown` fired against the `checkout-service` service at severity `page`. The incident duration is still being tracked. The incident-engine queried Tempo, Loki, and Prometheus for available context, then produced this postmortem for human review.
@@ -22,7 +22,7 @@ On 2026-07-16T05:27:43.370000+00:00, the alert `ServiceDown` fired against the `
 | 2026-07-16T05:22:58.472365+00:00 | tempo | Trace 0c866bf9d71556b164293a57cf93de98 observed for service 'checkout-service' (duration 0.0ms) |
 | 2026-07-16T05:22:58.473185+00:00 | tempo | Trace cda66b18e0f00dc745f5603437542f65 observed for service 'checkout-service' (duration 2.0ms) |
 | 2026-07-16T05:23:08.324823+00:00 | tempo | Trace d45e4942c7f612c6de5288a29cbe0cd3 observed for service 'synthetic-monitor' (duration 11.0ms) |
-| 2026-07-16T05:23:08.335515+00:00 | loki | Log entry (trace d45e4942c7f612c6de5288a29cbe0cd3): HTTP Request: GET http://checkout-service-checkout-service.ecom.svc.cluster.local:8003/healthz "HTTP/1.1 200 OK" |
+| 2026-07-16T05:23:08.335515+00:00 | loki | Log entry (trace d45e4942c7f612c6de5288a29cbe0cd3): HTTP Request: GET http://checkout-service.ecom.svc.cluster.local:8003/healthz "HTTP/1.1 200 OK" |
 | 2026-07-16T05:23:08.468130+00:00 | tempo | Trace e1fbb0d186d72f515aa97d21bb263231 observed for service 'checkout-service' (duration 2.0ms) |
 | 2026-07-16T05:23:08.471126+00:00 | tempo | Trace 3505ea6fa322a5b5969b5c6effb35a23 observed for service 'checkout-service' (duration 0.0ms) |
 | 2026-07-16T05:23:08.471850+00:00 | tempo | Trace 9676d290d335dfb6d304d166f663f79b observed for service 'checkout-service' (duration 2.0ms) |
@@ -32,7 +32,7 @@ On 2026-07-16T05:27:43.370000+00:00, the alert `ServiceDown` fired against the `
 ## Root Cause
 The following chaos experiments are correlated with this incident:
 
-- **demo-alert-checkout** (PodChaos) — started at 2026-07-16T05:25:10Z in namespace `chaos-testing` targeting `checkout-service`; spec: `{"action": "pod-failure", "duration": "3m", "mode": "all", "selector": {"labelSelectors": {"app.kubernetes.io/name": "checkout-service"}, "namespaces": ["ecom"]}}`.
+- **demo-alert-checkout** (PodChaos), started at 2026-07-16T05:25:10Z in namespace `chaos-testing` targeting `checkout-service`; spec: `{"action": "pod-failure", "duration": "3m", "mode": "all", "selector": {"labelSelectors": {"app.kubernetes.io/name": "checkout-service"}, "namespaces": ["ecom"]}}`.
 
 Validate by replaying the experiment in a staging cluster and observing whether the same alert fires within the same window.
 

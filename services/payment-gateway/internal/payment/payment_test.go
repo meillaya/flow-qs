@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
-	"github.com/example/payment-gateway/internal/payment"
+	paymentv1 "github.com/meillaya/flow-qs/services/payment-gateway/gen/proto/payment/v1"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/payment"
 )
 
 func TestDecideStatus_ApprovesSmallAmount(t *testing.T) {

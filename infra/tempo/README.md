@@ -5,8 +5,8 @@ Helm chart with local filesystem persistence and 7-day trace retention.
 
 ## Files
 
-- `helm-values.yaml` — Helm values override
-- `Makefile` — `lint`, `apply`, `reset` helpers
+- `helm-values.yaml`: Helm values override
+- `Makefile`: `lint`, `apply`, `reset` helpers
 
 ## Configuration highlights
 
@@ -24,11 +24,13 @@ Helm chart with local filesystem persistence and 7-day trace retention.
 
 The chart's Service exposes multiple receivers. The ones used here:
 
-- `3200` / `tempo-prom-metrics` — Tempo HTTP API (`/ready`, `/api/search`, etc.)
-- `4317` / `grpc-tempo-otlp` — OTLP gRPC receiver (used by the OTel Collector)
-- `4318` / `tempo-otlp-http` — OTLP HTTP receiver
+- `3200` / `tempo-prom-metrics`: Tempo HTTP API (`/ready`, `/api/search`, etc.)
+- `4317` / `grpc-tempo-otlp`: OTLP gRPC receiver (used by the OTel Collector)
+- `4318` / `tempo-otlp-http`: OTLP HTTP receiver
 
 ## Deploy
+
+Run these commands from `infra/tempo`.
 
 ```bash
 make apply
@@ -39,14 +41,22 @@ Or manually:
 ```bash
 helm repo add grafana-community https://grafana-community.github.io/helm-charts
 helm upgrade --install tempo grafana-community/tempo --version 2.2.3 \
-  -n observability -f infra/tempo/helm-values.yaml --create-namespace
+  -n observability -f helm-values.yaml --create-namespace
 ```
 
 ## Verify
 
+Start the port forward in another terminal:
+
+```bash
+kubectl -n observability port-forward svc/tempo 3200:3200
+```
+
+Then run:
+
 ```bash
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=tempo -n observability --timeout=120s
-curl -sf http://tempo.observability:3200/ready
+curl -sf http://127.0.0.1:3200/ready
 kubectl get pvc -n observability -l app.kubernetes.io/name=tempo
 ```
 

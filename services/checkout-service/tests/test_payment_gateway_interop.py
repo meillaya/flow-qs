@@ -23,14 +23,23 @@ def _free_port() -> int:
 
 
 def _stop_process_group(process: subprocess.Popen[bytes]) -> None:
+    """Stop the gateway process group, tolerating an already-exited child."""
+    if process.poll() is not None:
+        process.wait()
+        return
+
     try:
         os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+    except (ProcessLookupError, PermissionError):
+        process.terminate()
+
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            process.kill()
         process.wait(timeout=5)
 
 

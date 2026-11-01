@@ -13,7 +13,9 @@ OUT_DIR="${ROOT_DIR}/app/proto"
     --grpc_python_out="${OUT_DIR}" \
     "${ROOT_DIR}/proto/payment.proto"
 
-sed -i 's/^import payment_pb2 as payment__pb2$/from . import payment_pb2 as payment__pb2/' \
+sed -i.bak 's/^import payment_pb2 as payment__pb2$/from . import payment_pb2 as payment__pb2/' \
     "${OUT_DIR}/payment_pb2_grpc.py"
-sed -i 's/, metaclass=_enum_type_wrapper.EnumTypeWrapper//' \
+rm -f "${OUT_DIR}/payment_pb2_grpc.py.bak"
+sed -i.bak 's/, metaclass=_enum_type_wrapper.EnumTypeWrapper//' \
     "${OUT_DIR}/payment_pb2.pyi"
+rm -f "${OUT_DIR}/payment_pb2.pyi.bak"

@@ -1,4 +1,4 @@
-# Postmortem Template
+# Postmortem template
 
 > Annotated template. Replace bracketed text with incident-specific values. The incident engine generates files that follow this shape.
 
@@ -21,15 +21,6 @@ On **<date>** at **<time>**, **<service>** experienced **<symptom>** for **<dura
 ## Timeline
 
 <!-- UTC timestamps, 1-minute granularity if possible. Include detection, escalation, mitigation, and recovery. -->
-
-```mermaid
-flowchart LR
-    A[<time> Alert fires] --> B[<time> On-call paged]
-    B --> C[<time> Fault identified]
-    C --> D[<time> Mitigation applied]
-    D --> E[<time> Service recovered]
-    E --> F[<time> Postmortem generated]
-```
 
 | Time (UTC) | Event |
 |------------|-------|

@@ -6,7 +6,7 @@ Commands below that use `127.0.0.1:3000`, `:9090`, or `:9093` assume the
 matching `kubectl port-forward` from [SETUP.md](./SETUP.md) is running. The
 platform Services are not permanently exposed on the host.
 
-## Common Operations
+## Common operations
 
 ### A service is down
 
@@ -207,7 +207,7 @@ Symptoms: Prometheus pod is in `Evicted` or `CrashLoopBackOff`; disk pressure wa
    helm upgrade --install <new-service> charts/<new-service> -n ecom
    ```
 
-9. Update the architecture diagram in `docs/ARCHITECTURE.md` and the stack table in `README.md`.
+9. Update the figures in `docs/figures` with `make figures` and the stack table in `README.md`.
 
 ### How to add a new SLO
 
@@ -294,7 +294,7 @@ Symptoms: Prometheus pod is in `Evicted` or `CrashLoopBackOff`; disk pressure wa
 
 8. Add the experiment to `chaos/Makefile` and document it in `docs/DEMO.md`.
 
-## Related Docs
+## Related docs
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md): system design and telemetry flows
 - [DEMO.md](./DEMO.md): running the demo

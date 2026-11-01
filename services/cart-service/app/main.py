@@ -1,7 +1,7 @@
 """Cart service with in-memory state and OTel auto-instrumentation.
 
 State is stored in a plain Python dict keyed by ``user_id``.  Cart data is lost
-when the process restarts — this is an intentional demo limitation, not a bug.
+when the process restarts. This is an intentional demo limitation, not a bug.
 """
 
 from __future__ import annotations

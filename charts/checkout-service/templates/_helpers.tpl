@@ -9,8 +9,11 @@ top-level flow-qs umbrella.
 {{- end -}}
 
 {{- define "observability-platform.fullname" -}}
-{{- $name := default .Chart.Name .Values.serviceName -}}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+{{- if .Values.serviceName }}
+{{- .Values.serviceName | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
 {{- end -}}
 
 {{- define "observability-platform.chart" -}}

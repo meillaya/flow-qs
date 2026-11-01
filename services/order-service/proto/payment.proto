@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package payment.v1;
 
-option go_package = "github.com/example/payment-gateway/github.com/example/payment-gateway/gen/proto/payment/v1;paymentv1";
+option go_package = "github.com/meillaya/flow-qs/services/payment-gateway/gen/proto/payment/v1;paymentv1";
 
 // PaymentService exposes charge, status, and refund operations.
 service PaymentService {

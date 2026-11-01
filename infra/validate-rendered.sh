@@ -9,7 +9,7 @@ cd "$root"
 grep -Eq '^CLUSTER_NAME[[:space:]]*:= flow-qs$' Makefile
 grep -Eq '^cluster_name[[:space:]]*=[[:space:]]*"flow-qs"$' infra/cluster/terraform.tfvars
 grep -q 'default     = "flow-qs"' infra/cluster/variables.tf
-grep -q '^# flow-qs: Distributed Observability Platform$' README.md
+grep -q '^# flow-qs: distributed observability platform$' README.md
 
 grep -q '^clean: clean-runtime' Makefile
 bash infra/test-platform-contracts.sh
@@ -62,6 +62,12 @@ grep -q 'prometheus.io/scrape: "true"' "$tmp/payment-gateway"
 grep -q 'prometheus.io/port: "8005"' "$tmp/payment-gateway"
 grep -q 'prometheus.io/path: "/metrics"' "$tmp/payment-gateway"
 grep -q 'app.kubernetes.io/part-of: flow-qs' "$tmp/checkout-service"
+grep -q '^  name: checkout-service$' "$tmp/checkout-service"
+grep -q 'checkout-service.ecom.svc.cluster.local:8003' "$tmp/synthetic-monitor"
+if grep -q 'checkout-service-checkout-service' "$tmp"/*; then
+  echo "a rendered manifest kept the doubled checkout service name" >&2
+  exit 1
+fi
 
 sed -n '/^helm-services:/,/^$/p' Makefile >"$tmp/helm-services"
 grep -q -- "--set-string \"\$\$image_key=\$(IMAGE_TAG)\"" "$tmp/helm-services"

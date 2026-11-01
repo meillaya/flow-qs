@@ -1,14 +1,14 @@
 """FastAPI app: Alertmanager webhook receiver that emits postmortem.md files.
 
 Endpoints:
-- ``POST /webhook`` — Accepts the Alertmanager webhook payload, correlates
+- ``POST /webhook``: Accepts the Alertmanager webhook payload, correlates
   traces from Tempo, logs from Loki and metrics from Prometheus, generates a
   postmortem markdown file and persists incident metadata to SQLite.
-- ``GET /incidents`` — Returns a list of all known incidents.
-- ``GET /incidents/{id}`` — Returns a single incident + its rendered
+- ``GET /incidents``: Returns a list of all known incidents.
+- ``GET /incidents/{id}``: Returns a single incident + its rendered
   postmortem markdown.
-- ``GET /healthz`` and ``GET /readyz`` — Kubernetes probes.
-- ``GET /metrics`` — Prometheus scrape endpoint.
+- ``GET /healthz`` and ``GET /readyz``: Kubernetes probes.
+- ``GET /metrics``: Prometheus scrape endpoint.
 """
 
 from __future__ import annotations
@@ -247,7 +247,7 @@ def create_app(
     store: IncidentStore | None = None,
     chaos_source: ChaosSource | None = None,
 ) -> FastAPI:
-    """Build a FastAPI instance — accepts overrides for tests."""
+    """Build a FastAPI instance. Accepts overrides for tests."""
     app = FastAPI(
         title="incident-engine",
         description="Alertmanager webhook receiver that emits postmortem.md files.",

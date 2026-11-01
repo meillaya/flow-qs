@@ -1,4 +1,4 @@
-module github.com/example/payment-gateway
+module github.com/meillaya/flow-qs/services/payment-gateway
 
 go 1.26.0
 

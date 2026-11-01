@@ -8,14 +8,14 @@
 ##   {{ release-name }}-prometheus-config
 ##
 ## Scrape jobs:
-##   1. prometheus        — self-scrape on :9090
-##   2. otel-collector    — OTel Collector's internal metrics endpoint :8889
-##   3. kube-state-metrics — service-discovered, label-matched
-##   4. kubernetes-pods   — pods with prometheus.io/scrape=true annotation in
+##   1. prometheus: self-scrape on :9090
+##   2. otel-collector: OTel Collector internal metrics endpoint :8889
+##   3. kube-state-metrics: service-discovered, label-matched
+##   4. kubernetes-pods: pods with prometheus.io/scrape=true annotation in
 ##                          the {ecom, observability, incident} namespaces only
 ##
 ## Note on path: prometheus.yml is what server.configPath (/etc/config/prometheus.yml)
-## expects — keep the data key as `prometheus.yml`.
+## expects. Keep the data key as `prometheus.yml`.
 
 apiVersion: v1
 kind: ConfigMap

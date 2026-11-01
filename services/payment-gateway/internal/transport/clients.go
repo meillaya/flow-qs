@@ -4,7 +4,7 @@ package transport
 import (
 	"net/http"
 
-	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
+	paymentv1 "github.com/meillaya/flow-qs/services/payment-gateway/gen/proto/payment/v1"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"

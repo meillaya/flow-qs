@@ -15,14 +15,15 @@ Reads per-service SLO definitions from ``slo/*.yaml`` and emits two rule files:
       - Per-service standard alerts:
         ServiceDown, HighErrorRate, HighLatencyP99
 
-The MWMB thresholds follow the Google SRE Workbook (Chapter 5 — Alerting on
+The MWMB thresholds follow the Google SRE Workbook (Chapter 5, Alerting on
 SLOs) multipliers: 14.4x / 6x / 1x for the 1h / 6h / 3d windows.
 
 Run from the repo root::
 
-    python3 scripts/build_prometheus_rules.py
+    uv run --with pyyaml python scripts/build_prometheus_rules.py
 
-No third-party dependencies; uses the stdlib only.
+Requires PyYAML. The uv command above supplies it without changing the
+project environment.
 """
 from __future__ import annotations
 
@@ -48,7 +49,7 @@ WINDOWS = ["5m", "30m", "1h", "6h", "1d", "3d", "30d"]
 SYNTHETIC_SERVICE_NAMES: Final[dict[str, str]] = {
     "cart-service": "cart-service",
     "catalog-service": "catalog-service",
-    "checkout-service": "checkout-service-checkout-service",
+    "checkout-service": "checkout-service",
     "inventory-service": "inventory-service",
     "order-service": "order-service",
     "payment-gateway": "payment-gateway",
@@ -202,9 +203,9 @@ def build_recording_groups(slos: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 # MWMB thresholds (Google SRE Workbook, "Alerting on SLOs", Table 4.2)
 # ---------------------------------------------------------------------------
-# Page-tier (fast burn): 14.4x / 6x burn rates over 1h / 6h — equivalent to
+# Page-tier (fast burn): 14.4x / 6x burn rates over 1h / 6h, equivalent to
 # consuming ~2% / 5% of the monthly error budget in the short window.
-# Ticket-tier (slow burn): 6x / 1x burn rates over 6h / 3d — catches
+# Ticket-tier (slow burn): 6x / 1x burn rates over 6h / 3d, which catches
 # sustained budget drains that have not yet triggered the fast-burn rule.
 PAGE_FACTORS = {"1h": 14.4, "6h": 6.0}
 TICKET_FACTORS = {"6h": 6.0, "3d": 1.0}
@@ -464,7 +465,7 @@ def dump_yaml(path: Path, groups: list[dict]) -> None:
     """Emit a Prometheus rule_files document.
 
     We open-code the dumper so that scalar ``expr`` strings are emitted as
-    block scalars (``|``) — yaml.safe_dump renders long expressions as
+    block scalars (``|``). yaml.safe_dump renders long expressions as
     folded scalars which promtool parses fine but is unreadable.
     """
     path.parent.mkdir(parents=True, exist_ok=True)

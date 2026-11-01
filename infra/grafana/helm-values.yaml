@@ -1,10 +1,10 @@
 # ----------------------------------------------------------------------------
-# Grafana Helm values — observability stack (Task 7)
+# Grafana Helm values for the flow-qs observability stack
 # Chart: grafana/grafana (https://github.com/grafana/helm-charts/tree/main/charts/grafana)
 #
 # Demo / local-cluster only. Do NOT use the admin password outside demos.
-# Dashboards are provisioned by Task 17 — datasource sidecar below only defines
-# where to look for them; provisioning them is deferred.
+# The dashboard sidecar loads the JSON files under dashboards/. The
+# datasource sidecar below only defines where Grafana looks for them.
 # ----------------------------------------------------------------------------
 
 # ---- Image / version -------------------------------------------------------
@@ -15,7 +15,7 @@ image:
 
 # ---- Admin auth (demo only) ------------------------------------------------
 # NOTE: adminPassword is intentionally "admin" for the local demo cluster.
-# Do NOT enable OAuth/SSO here — it is explicitly out of scope for this task.
+# Do NOT enable OAuth/SSO here. It is out of scope for this local demo.
 adminUser: admin
 adminPassword: admin
 
@@ -61,8 +61,8 @@ grafana.ini:
 # Sidecar.datasources watches for ConfigMaps labelled `grafana_datasource` and
 # loads them as datasources.
 # Sidecar.dashboards watches for ConfigMaps labelled `grafana_dashboard` and
-# mounts them under the path configured below. Task 17 owns the actual
-# dashboard JSON files.
+# mounts them under the path configured below. The dashboard JSON files
+# live in dashboards/ and are applied by `make helm-obs`.
 sidecar:
   datasources:
     enabled: true
@@ -75,13 +75,12 @@ sidecar:
     label: grafana_dashboard
     folder: /var/lib/grafana/dashboards
     searchNamespace: ""
-    # Mount the dashboards dir + subdirs (Task 17 will populate
-    # /var/lib/grafana/dashboards/ecom/).
+    # Mount the dashboards directory and its subdirectories.
     foldersFromFilesStructure: true
     resources: {}
 
 # Default dashboard provider / baseline mount so sidecars have a target path.
-# Task 17 adds real dashboards under /var/lib/grafana/dashboards/ecom/.
+# The provisioned dashboards land under /var/lib/grafana/dashboards/ecom/.
 dashboardsConfigMaps: {}
 dashboardsSecret: {}
 
@@ -114,7 +113,7 @@ tolerations: []
 affinity: {}
 
 # ---- Test connection probes -------------------------------------------------
-# Disable the image-renderer sidecar (Task 7 MUST NOT add external image
-# rendering). We don't ship a separate image-renderer deployment.
+# Disable the image-renderer sidecar. The demo does not render images and
+# does not ship a separate image-renderer deployment.
 imageRenderer:
   enabled: false

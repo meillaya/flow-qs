@@ -190,11 +190,11 @@ async def test_fetches_checkout_synthetic_prometheus_value_without_invalid_escap
         if query.startswith("synthetic_check_success"):
             result = [
                 {
-                    "metric": {"service": "checkout-service-checkout-service.ecom:8003"},
+                    "metric": {"service": "checkout-service.ecom:8003"},
                     "values": [[1783751446, "0"]],
                 },
                 {
-                    "metric": {"service": "checkout-service-checkout-service.ecom:8003"},
+                    "metric": {"service": "checkout-service.ecom:8003"},
                     "values": [[1783751446, "NaN"]],
                 },
             ]

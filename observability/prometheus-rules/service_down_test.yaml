@@ -10,7 +10,7 @@ tests:
         values: '1 1 0 0 0 0'
       - series: 'synthetic_check_success{service="catalog-service.ecom.svc.cluster.local:8000"}'
         values: '1 1 0 0 0 0'
-      - series: 'synthetic_check_success{service="checkout-service-checkout-service.ecom.svc.cluster.local:8003"}'
+      - series: 'synthetic_check_success{service="checkout-service.ecom.svc.cluster.local:8003"}'
         values: '1 1 0 0 0 0'
       - series: 'synthetic_check_success{service="inventory-service.ecom.svc.cluster.local:8001"}'
         values: '1 1 0 0 0 0'

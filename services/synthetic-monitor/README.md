@@ -6,8 +6,8 @@ In-cluster synthetic health monitor for the flow-qs e-commerce services.
 
 - Polls `/healthz` on all six services every 30 seconds using an async `httpx` client.
 - Emits OpenTelemetry metrics:
-  - `synthetic_check_success{service="X"}` — `1` on HTTP 200, otherwise `0`.
-  - `synthetic_check_duration_seconds{service="X"}` — request latency.
+  - `synthetic_check_success{service="X"}`: `1` on HTTP 200, otherwise `0`.
+  - `synthetic_check_duration_seconds{service="X"}`: request latency.
 - Exports metrics via OTLP to `http://otel-collector.observability:4317` and
   simultaneously exposes the same process metrics at the Prometheus-compatible
   `/metrics` endpoint. The two readers are independent; `/metrics` is not an

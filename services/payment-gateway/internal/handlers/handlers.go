@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/example/payment-gateway/internal/payment"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/payment"
 )
 
 // HTTPStore is the store interface used by HTTP handlers.

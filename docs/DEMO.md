@@ -1,4 +1,4 @@
-# Demo Guide
+# Demo guide
 
 `make demo` runs a strict, causally correlated load-and-chaos incident demo.
 Partial readiness, unrelated postmortems, missing Chaos Mesh correlation, k6
@@ -21,7 +21,7 @@ synthetic alert or fallback postmortem path.
 6. Wait for a fresh postmortem containing both:
 
    ```text
-   # Postmortem — `ServiceDown` on `checkout-service`
+   # Postmortem: `ServiceDown` on `checkout-service`
    **demo-alert-checkout** (PodChaos)
    ```
 

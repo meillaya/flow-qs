@@ -7,15 +7,15 @@
 ##
 ## Design notes:
 ## - Retention 31d is longer than Tempo/Loki (7d) because Prometheus metrics are
-##   cheap and the SLO multi-window burn-rate math (Task 15/16) benefits from a
-##   31d window covers the full 30d SLO evaluation window).
+##   cheap and the SLO multi-window burn-rate math benefits from a 31d window
+##   that covers the full 30d SLO evaluation window.
 ## - `server.configMapOverrideName` defers the full Prometheus config to
 ##   `infra/prometheus/configmap.yaml`, which is applied independently.
 ## - Alertmanager config is inlined under `alertmanager.config`; the equivalent
 ##   standalone file lives at `infra/prometheus/alertmanager-config.yaml`.
-## - Pushgateway is disabled per design (pull-model only, see plan guardrail).
+## - Pushgateway is disabled; every metric path is pull-based or remote write.
 ## - kube-state-metrics is enabled for pod-level metrics required by SLO/alert
-##   rules (Task 15/16).
+##   rules.
 
 server:
   fullnameOverride: prometheus
@@ -126,8 +126,8 @@ alertmanager:
       }
       {{- end }}
 
-## kube-state-metrics subchart — provides pod/deployment/statefulset metrics
-## referenced by Task 15 SLO recoding rules and Task 16 alert rules.
+## kube-state-metrics subchart: provides pod/deployment/statefulset metrics
+## referenced by the SLO recording rules and alert rules.
 kube-state-metrics:
   enabled: true
 
@@ -136,10 +136,10 @@ kube-state-metrics:
 prometheus-node-exporter:
   enabled: true
 
-## Pushgateway: DISABLED per plan guardrail ("No Prometheus pushgateway").
+## Pushgateway: disabled because every metric path is pull-based or remote write.
 prometheus-pushgateway:
   enabled: false
 
-## NetworkPolicy off — cluster is local k3d, port-forward only.
+## NetworkPolicy off: cluster is local k3d, port-forward only.
 networkPolicy:
   enabled: false

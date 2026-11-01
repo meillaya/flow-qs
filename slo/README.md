@@ -1,4 +1,4 @@
-# Service Level Objectives
+# Service level objectives
 
 The seven YAML files in this directory are the source of truth for SLO output
 identity, raw metric selectors, objectives, rolling windows, and declared

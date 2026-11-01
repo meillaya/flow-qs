@@ -1,6 +1,6 @@
 > **Historical illustration:** this narrative predates the current gRPC timeout, Chaos Mesh, and strict causal-demo contracts. It is a documentation example, not runtime evidence.
 
-# Postmortem: Checkout Failures Due to Payment Gateway Network Delay
+# Postmortem: checkout failures due to payment gateway network delay
 
 ## Summary
 
@@ -15,16 +15,6 @@ On **2026-07-09** at **14:28 UTC**, the `checkout-service` experienced elevated 
 - **User impact**: Customers saw slow or failed checkout responses; no completed orders were lost because compensating releases were applied
 
 ## Timeline
-
-```mermaid
-flowchart LR
-    A[14:28:03 Alert fires] --> B[14:28:33 Slow-burn alert escalates]
-    B --> C[14:29:00 On-call notices via Alertmanager]
-    C --> D[14:30:15 Network delay experiment identified]
-    D --> E[14:32:00 Experiment deleted]
-    E --> F[14:32:45 Service recovered]
-    F --> G[14:33:10 Postmortem generated]
-```
 
 | Time (UTC) | Event |
 |------------|-------|

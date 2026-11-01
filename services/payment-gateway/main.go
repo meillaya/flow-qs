@@ -18,12 +18,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
-	"github.com/example/payment-gateway/internal/handlers"
-	"github.com/example/payment-gateway/internal/metrics"
-	"github.com/example/payment-gateway/internal/otel"
-	"github.com/example/payment-gateway/internal/payment"
-	"github.com/example/payment-gateway/internal/server"
+	paymentv1 "github.com/meillaya/flow-qs/services/payment-gateway/gen/proto/payment/v1"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/handlers"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/metrics"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/otel"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/payment"
+	"github.com/meillaya/flow-qs/services/payment-gateway/internal/server"
 )
 
 func main() {

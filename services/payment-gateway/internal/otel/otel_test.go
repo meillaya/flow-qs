@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
-	pgotel "github.com/example/payment-gateway/internal/otel"
+	pgotel "github.com/meillaya/flow-qs/services/payment-gateway/internal/otel"
 )
 
 func TestInit_SetsTracerProvider(t *testing.T) {

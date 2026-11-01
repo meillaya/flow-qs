@@ -1,4 +1,4 @@
-# k6 Load Tests
+# k6 load tests
 
 This directory contains [k6](https://k6.io/) scripts and Kubernetes Job
 manifests for load-testing the flow-qs demo services.
@@ -21,7 +21,7 @@ new image.
 | `k6-job-demo.yaml` | Demo-only sustained load with chaos-aware thresholds |
 | `Makefile` | Convenience targets to apply each Job |
 
-## Quick Start
+## Quick start
 
 ```bash
 # Smoke test
@@ -34,25 +34,25 @@ make -C load logs-smoke
 kubectl wait --for=condition=complete job/k6-smoke -n load --timeout=120s
 ```
 
-## Available Makefile Targets
+## Available Makefile targets
 
-- `load-smoke` — apply the smoke-test Job
-- `load-load` — apply the sustained-load Job
-- `load-stress` — apply the stress-test Job
-- `load-spike` — apply the spike-test Job
-- `logs-smoke`, `logs-load`, `logs-stress`, `logs-spike` — stream Job logs
-- `clean` — delete all k6 Jobs and ConfigMaps
+- `load-smoke`: apply the smoke-test Job
+- `load-load`: apply the sustained-load Job
+- `load-stress`: apply the stress-test Job
+- `load-spike`: apply the spike-test Job
+- `logs-smoke`, `logs-load`, `logs-stress`, `logs-spike`: stream Job logs
+- `clean`: delete all k6 Jobs and ConfigMaps
 
-## Interpreting k6 Output
+## Interpreting k6 output
 
 Key lines in the Job logs:
 
-- `http_req_duration` — request latency; the `p(95)` value is compared against
+- `http_req_duration`: request latency; the `p(95)` value is compared against
   the threshold for the test.
-- `http_req_failed` — percentage of requests that failed (non-2xx or network
+- `http_req_failed`: percentage of requests that failed (non-2xx or network
   error); must stay below the test threshold.
-- `checks` — pass rate of explicit `check()` assertions.
-- `checkout_success_rate` — custom metric for completed checkouts in every
+- `checks`: pass rate of explicit `check()` assertions.
+- `checkout_success_rate`: custom metric for completed checkouts in every
   profile. Stress and spike sample checkouts while health traffic supplies the
   bulk of their intentionally high request volume.
 
@@ -80,7 +80,7 @@ checkout success above 95%. Smoke, stress, and spike remain unchanged.
 ## Notes
 
 - Tests assume services are reachable at their cluster DNS names
-  (`cart-service.ecom`, `checkout-service-checkout-service.ecom`, etc.) on the
+  (`cart-service.ecom`, `checkout-service.ecom`, etc.) on the
   ports defined in the Helm values.
 - The checkout flow posts to `cart-service:8002/cart/{user_id}/items` and then
   `checkout-service:8003/checkout`.

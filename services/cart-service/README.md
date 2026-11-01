@@ -4,19 +4,19 @@ Shopping cart service built with Python/FastAPI and OTel instrumentation.
 
 ## State
 
-Cart state is stored in an in-memory Python dictionary keyed by `user_id`.  Data is
-lost when the pod or process restarts.  This is a deliberate demo limitation;
-persistence (Redis, database, etc.) is intentionally out of scope for this task.
+Cart state is stored in an in-memory Python dictionary keyed by `user_id`.
+Data is lost when the pod or process restarts. This is a deliberate demo
+limitation; persistence (Redis, database, and so on) is out of scope.
 
 ## Endpoints
 
-- `GET /healthz` — liveness probe
-- `GET /readyz` — readiness probe
-- `GET /cart/{user_id}` — return the current cart
-- `POST /cart/{user_id}/items` — add an item (`{"sku": str, "qty": int}`); merges
+- `GET /healthz`: liveness probe
+- `GET /readyz`: readiness probe
+- `GET /cart/{user_id}`: return the current cart
+- `POST /cart/{user_id}/items`: add an item (`{"sku": str, "qty": int}`); merges
   quantities when the same SKU is added again
-- `DELETE /cart/{user_id}/items/{sku}` — remove a SKU from the cart
-- `DELETE /cart/{user_id}` — clear the entire cart
+- `DELETE /cart/{user_id}/items/{sku}`: remove a SKU from the cart
+- `DELETE /cart/{user_id}`: clear the entire cart
 
 ## Pricing
 

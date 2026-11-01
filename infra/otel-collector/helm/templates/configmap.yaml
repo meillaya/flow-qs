@@ -7,7 +7,7 @@ metadata:
     {{- include "otel-collector.labels" . | nindent 4 }}
 data:
   # collector.yaml is the OTel Collector pipeline. Inlined from
-  # .Values.collectorConfig so the chart is self-contained — there is no
+  # .Values.collectorConfig so the chart is self-contained. There is no
   # separate file-mount step.
   collector.yaml: |-
     {{- .Values.collectorConfig | nindent 4 }}

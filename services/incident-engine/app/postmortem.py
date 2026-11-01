@@ -95,8 +95,8 @@ def _build_root_cause(record: IncidentRecord) -> str:
         return (
             "No chaos experiments with selectors matching the affected service "
             "were active in the lookback window. The most likely root cause is "
-            "an organic change (deploy, dependency failure, traffic spike) — "
-            "investigate the deployment log and recent commits.\n"
+            "an organic change (deploy, dependency failure, traffic spike). "
+            "Investigate the deployment log and recent commits.\n"
         )
     lines = [
         "The following chaos experiments are correlated with this incident:",
@@ -105,7 +105,7 @@ def _build_root_cause(record: IncidentRecord) -> str:
     for experiment in chaos:
         lines.append(
             f"- **{experiment.get('name', 'unknown')}** "
-            f"({experiment.get('kind', 'unknown')}) — "
+            f"({experiment.get('kind', 'unknown')}), "
             f"started at {experiment.get('start_time', 'unknown')} "
             f"in namespace `{experiment.get('namespace', 'unknown')}` "
             f"targeting `{experiment.get('target', record.service)}`; "
@@ -157,7 +157,7 @@ def _build_lessons(record: IncidentRecord) -> str:
 def render_postmortem(record: IncidentRecord, events: list[TimelineEvent]) -> str:
     """Render the full postmortem markdown for the given incident + timeline."""
     sections: list[str] = []
-    sections.append(f"# Postmortem — `{record.alertname}` on `{record.service}`\n")
+    sections.append(f"# Postmortem: `{record.alertname}` on `{record.service}`\n")
     sections.append(f"_Generated {datetime.now(UTC).isoformat()} by incident-engine._\n")
     sections.append("## Summary\n")
     sections.append(_build_summary(record) + "\n")

@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------------
-# Grafana provisioned datasources — observability stack (Task 7)
+# Grafana provisioned datasources for the flow-qs observability stack
 #
 # This file is loaded as a ConfigMap by the grafana/grafana Helm chart's
-# sidecar.datasources (label: grafana_datasource). It is the Source-of-Truth
+# sidecar.datasources (label: grafana_datasource). It is the source of truth
 # for which data sources Grafana knows about.
 #
 # Correlation wiring:
@@ -11,8 +11,8 @@
 #   Loki is the join target for logs and is also reachable from Explore.
 #   Alertmanager is included for ad-hoc alert inspection.
 #
-# NOTE: "uid" is stable — changing it will break existing dashboard links.
-# Dashboards that reference these UIDs are produced in Task 17.
+# NOTE: "uid" is stable. Changing it will break existing dashboard links.
+# Dashboards reference these UIDs.
 # ----------------------------------------------------------------------------
 
 apiVersion: 1
@@ -20,7 +20,7 @@ apiVersion: 1
 datasources:
 
   # =========================================================
-  # Prometheus — default datasource; metrics entry point.
+  # Prometheus: default datasource; metrics entry point.
   #   - exemplar traceId links → Tempo (exemplarTraceIdDestinations)
   #   - tracesToLogsV2 → Loki as a fallback (exemplars with log context)
   # =========================================================
@@ -58,7 +58,7 @@ datasources:
         filterByTraceID: true
 
   # =========================================================
-  # Tempo — traces entry point; tracesToLogsV2 → Loki.
+  # Tempo: traces entry point; tracesToLogsV2 → Loki.
   # =========================================================
   - name: Tempo
     uid: tempo-observability
@@ -85,10 +85,10 @@ datasources:
         datasourceUid: prometheus-observability
       nodeGraph:
         enabled: true
-    # No credentials — Tempo's OTLP/HTTP endpoint is internal to the cluster.
+    # No credentials: Tempo's OTLP/HTTP endpoint is internal to the cluster.
 
   # =========================================================
-  # Loki — logs entry point; used as the join target for
+  # Loki: logs entry point; used as the join target for
   # both Tempo (trace-to-logs) and Prometheus exemplars.
   # =========================================================
   - name: Loki
@@ -111,7 +111,7 @@ datasources:
           url: '$${__value}'
 
   # =========================================================
-  # Alertmanager — read-only alert inspection.
+  # Alertmanager: read-only alert inspection.
   # Grafana's own unified alerting is intentionally disabled in helm-values.yaml
   # so this is the only alerting surface reachable from the UI.
   # =========================================================

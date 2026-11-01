@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	paymentv1 "github.com/example/payment-gateway/gen/proto/payment/v1"
+	paymentv1 "github.com/meillaya/flow-qs/services/payment-gateway/gen/proto/payment/v1"
 )
 
 // ThresholdAmountCents is the maximum amount that is auto-approved.

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Kustomization for the 10 provisioned Grafana dashboards (Task 17).
+# Kustomization for the 10 provisioned Grafana dashboards.
 #
 # The grafana/grafana chart's sidecar.dashboards is enabled in
 # infra/grafana/helm-values.yaml and watches for ConfigMaps labeled

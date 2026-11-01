@@ -1,10 +1,13 @@
-# flow-qs Helm Charts
+# flow-qs Helm charts
 
-This directory contains reusable Helm charts for the observability platform.
+This directory contains the Helm charts for the flow-qs services.
+catalog-service and synthetic-monitor wrap `svc-template`; the other services
+carry their own charts.
 
 ## `svc-template`
 
-A minimal umbrella chart used as a base for all flow-qs services. It provides:
+A minimal wrapper chart used by catalog-service and synthetic-monitor. It
+provides:
 
 - A `Deployment` with standard Kubernetes labels, resource limits, liveness/readiness probes, and OpenTelemetry environment variables.
 - A `ClusterIP` `Service`.
@@ -17,7 +20,7 @@ Render the chart locally:
 
 ```bash
 helm template my-svc charts/svc-template \
-  --set-string image.repository=ghcr.io/flow-qs/catalog-service \
+  --set-string image.repository=k3d-observability-registry:5000/catalog-service \
   --set-string image.tag="git-$(git rev-parse --verify HEAD)"
 ```
 
@@ -26,7 +29,7 @@ Example `my-values.yaml`:
 ```yaml
 serviceName: catalog-service
 image:
-  repository: ghcr.io/flow-qs/catalog-service
+  repository: k3d-observability-registry:5000/catalog-service
 service:
   port: 8000
   targetPort: 8000
@@ -34,9 +37,9 @@ env:
   LOG_LEVEL: info
 ```
 
-Image tags are deployment inputs rather than floating chart defaults. The root
-`Makefile` builds `git-<full-commit-SHA>` images and injects the same tag into
-each release. Direct charts use `image.tag`; charts wrapping `svc-template` use
+The chart default is a local `dev` tag. The root `Makefile` builds
+`git-<full-commit-SHA>` images and injects that tag into each release. Direct
+charts use `image.tag`; charts wrapping `svc-template` use
 `svc-template.image.tag`. Commit service changes before building so a tag never
 refers to different source contents.
 
