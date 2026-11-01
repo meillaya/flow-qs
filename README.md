@@ -127,23 +127,6 @@ Ingress, TLS, or permanent host exposure.
 - [CONTRIBUTING.md](CONTRIBUTING.md): local gates, change rules, and commit
   format.
 
-## Repository layout
-
-| Path | Contents |
-|---|---|
-| `Makefile` | Cluster, deploy, verify, test, lint, demo, and figure targets |
-| `devenv.nix`, `devenv.yaml` | Reproducible development shell |
-| `infra/` | Terraform cluster, collector, Tempo, Loki, Prometheus, and Grafana config |
-| `services/` | Six product services, synthetic monitor, and incident engine |
-| `charts/` | One Helm chart per service plus a shared template chart |
-| `dashboards/` | Ten provisioned Grafana dashboards |
-| `observability/` | Prometheus recording and alert rules, Alertmanager template |
-| `slo/` | SLO source files |
-| `chaos/` | Chaos Mesh experiments and schedule tests |
-| `load/` | k6 scripts, Kubernetes Jobs, and demo threshold tests |
-| `scripts/` | Deployment, verification, SLO generation, and contract tests |
-| `docs/` | Setup, architecture, runbook, demo, figures, and examples |
-
 ## Development commands
 
 | Command | Purpose |
@@ -169,7 +152,3 @@ collector gateway and one replica per observability service.
 k3d 5.9.0's published compatibility matrix stops at K3s 1.33. The repository
 pins K3s 1.35.6 as a deliberate exception and gates it with the opt-in
 `make cluster-smoke` lifecycle test.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
